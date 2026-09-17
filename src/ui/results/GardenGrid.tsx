@@ -136,9 +136,10 @@ export default function GardenGrid({
   }
 
   return (
-    <div className="garden-grid__wrap" style={{ maxWidth: `${garden.width * TILE_PX_CAP}px` }}>
+    <div className="garden-grid__wrap">
       <svg
         className="garden-grid"
+        style={{ maxWidth: `${garden.width * TILE_PX_CAP}px` }}
         viewBox={`0 0 ${garden.width} ${garden.height}`}
         role="group"
         aria-label="Garden layout"
