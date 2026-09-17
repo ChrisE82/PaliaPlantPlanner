@@ -115,6 +115,8 @@ If all of these are tied, these tie-breakers apply in order:
 2. More buffs received by goal crops in total, including buffs no goal asked for.
 3. More tiles used by goal crops rather than helpers.
 
+When the planner compares layouts on different arrangements, a more compact arrangement (more shared plot edges) wins right after tie-breaker 1. Without this, buffs that no goal asked for would pick long, irregular arrangements that are impractical to build.
+
 Consequences the UI must explain:
 
 - A High "Maximize" goal can leave no space for Medium and Low goals. The results panel explains each shortfall, for example: "Wheat: 0 plants. The space went to Apple · Quantity · Maximize (High)."

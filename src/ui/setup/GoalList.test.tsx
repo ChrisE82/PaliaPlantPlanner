@@ -42,10 +42,10 @@ describe('GoalList', () => {
   it('switches the amount control between At least and Maximize for a quantity goal', async () => {
     const user = userEvent.setup();
     render(<GoalList issues={[]} />);
-    // Wheat / Quantity / Maximize is the third goal in the default example.
-    const goalId = useStore.getState().settings.goals[2].id;
+    // Wheat / Quantity / Maximize is the fourth goal in the default example.
+    const goalId = useStore.getState().settings.goals[3].id;
     const rows = screen.getAllByRole('listitem');
-    const wheatRow = rows[2];
+    const wheatRow = rows[3];
 
     const amountSelect = within(wheatRow).getByLabelText('Amount') as HTMLSelectElement;
     expect(amountSelect.value).toBe('max');
@@ -59,6 +59,30 @@ describe('GoalList', () => {
     await user.selectOptions(within(wheatRow).getByLabelText('Amount'), 'max');
     expect(useStore.getState().settings.goals.find((g) => g.id === goalId)?.amount).toEqual({ kind: 'max' });
     expect(within(wheatRow).queryByLabelText('Plant count')).toBeNull();
+  });
+
+  it('restores the stored plant count on blur instead of leaving it blank or stale', async () => {
+    const user = userEvent.setup();
+    render(<GoalList issues={[]} />);
+    const goalId = useStore.getState().settings.goals[0].id; // Apple / Quantity / at least 4 / Must
+    const rows = screen.getAllByRole('listitem');
+    const appleRow = rows[0];
+    const input = within(appleRow).getByLabelText('Plant count') as HTMLInputElement;
+    expect(input.value).toBe('4');
+
+    await user.clear(input);
+    expect(input.value).toBe(''); // shown while editing
+    expect(useStore.getState().settings.goals.find((g) => g.id === goalId)?.amount).toEqual({ kind: 'count', n: 4 });
+
+    await user.tab(); // blur with no valid edit made
+    expect(input.value).toBe('4'); // restored, not left blank
+    expect(useStore.getState().settings.goals.find((g) => g.id === goalId)?.amount).toEqual({ kind: 'count', n: 4 });
+
+    await user.clear(input);
+    await user.type(input, '7');
+    await user.tab();
+    expect(input.value).toBe('7'); // a valid edit is kept across blur
+    expect(useStore.getState().settings.goals.find((g) => g.id === goalId)?.amount).toEqual({ kind: 'count', n: 7 });
   });
 
   it('changes importance through the segmented radio control', async () => {

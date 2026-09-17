@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { CROP_BY_ID } from '../../data/crops';
+import { buildGarden } from '../../engine/garden';
 import { RULES } from '../../engine/rules';
 import {
   ALL_GOAL_CROPS,
@@ -10,8 +12,14 @@ import {
   type Importance,
   type Measure,
   type PlanSettings,
+  type PlanProgress,
+  type PlanResult,
+  type Placement,
   type PlotPos,
+  type TilePos,
 } from '../../engine/types';
+import { eraseAt, placeCropAt, toggleLockAtTile, toggleLockPlotAt as computeLockPlotToggle } from '../results/edit';
+import { isSearchTime, type SearchTime } from '../results/planTiming';
 
 // ---------------------------------------------------------------------------
 // Storage
@@ -28,6 +36,7 @@ interface PersistedShape {
   settings: PlanSettings;
   customPlots: PlotPos[];
   spaceLimit: SpaceLimit;
+  searchTime: SearchTime;
 }
 
 /** crypto.randomUUID with a fallback for environments that lack it. */
@@ -50,8 +59,8 @@ export function defaultGoals(): Goal[] {
   return [
     { id: makeId(), crop: 'apple', measure: 'quantity', amount: { kind: 'count', n: 4 }, importance: 'must' },
     { id: makeId(), crop: 'apple', measure: 'harvestBoost', amount: { kind: 'all' }, importance: 'high' },
-    { id: makeId(), crop: 'wheat', measure: 'quantity', amount: { kind: 'max' }, importance: 'medium' },
-    { id: makeId(), crop: ALL_GOAL_CROPS, measure: 'waterRetain', amount: { kind: 'all' }, importance: 'low' },
+    { id: makeId(), crop: ALL_GOAL_CROPS, measure: 'waterRetain', amount: { kind: 'all' }, importance: 'medium' },
+    { id: makeId(), crop: 'wheat', measure: 'quantity', amount: { kind: 'max' }, importance: 'low' },
   ];
 }
 
@@ -140,9 +149,10 @@ function isSpaceLimit(v: unknown): v is SpaceLimit {
   return (s.width === null || typeof s.width === 'number') && (s.height === null || typeof s.height === 'number');
 }
 
-function isPersistedShape(v: unknown): v is PersistedShape {
+/** Validates the part of the persisted shape that predates the searchTime field (see readPersisted). */
+function isPersistedCore(v: unknown): v is Omit<PersistedShape, 'searchTime'> {
   if (!v || typeof v !== 'object') return false;
-  const p = v as Partial<PersistedShape>;
+  const p = v as { settings?: unknown; customPlots?: unknown; spaceLimit?: unknown };
   return isPlanSettings(p.settings) && Array.isArray(p.customPlots) && p.customPlots.every(isPlotPos) && isSpaceLimit(p.spaceLimit);
 }
 
@@ -152,7 +162,11 @@ function readPersisted(): PersistedShape | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    return isPersistedShape(parsed) ? parsed : null;
+    if (!isPersistedCore(parsed)) return null;
+    // searchTime was added after the first release; default it rather than
+    // rejecting otherwise-valid older saves that lack it.
+    const storedSearchTime = (parsed as { searchTime?: unknown }).searchTime;
+    return { ...parsed, searchTime: isSearchTime(storedSearchTime) ? storedSearchTime : 'normal' };
   } catch {
     return null;
   }
@@ -187,6 +201,50 @@ function applyGoalPatch(goal: Goal, patch: Partial<Goal>): Goal {
 }
 
 // ---------------------------------------------------------------------------
+// Run state: a plan in progress or its result, and per-solution edits
+// ---------------------------------------------------------------------------
+
+export type RunStatus = 'idle' | 'running' | 'done' | 'stopped' | 'error';
+
+/** One past state to undo back to (see undoEdit). */
+interface EditSnapshot {
+  placements: Placement[];
+  lockedTiles: TilePos[];
+}
+
+/** The displayed layout for one solution tab: live placements, locks, and undo history. */
+export interface SolutionEditState {
+  placements: Placement[];
+  lockedTiles: TilePos[];
+  history: EditSnapshot[];
+}
+
+const MAX_UNDO_HISTORY = 50;
+
+function withHistory(es: SolutionEditState): EditSnapshot[] {
+  const history = [...es.history, { placements: es.placements, lockedTiles: es.lockedTiles }];
+  return history.length > MAX_UNDO_HISTORY ? history.slice(history.length - MAX_UNDO_HISTORY) : history;
+}
+
+function freshSolutionStates(result: PlanResult): SolutionEditState[] {
+  return result.solutions.map((s): SolutionEditState => ({ placements: s.placements, lockedTiles: [], history: [] }));
+}
+
+function clearedRunState() {
+  return {
+    status: 'idle' as RunStatus,
+    progress: null as PlanProgress | null,
+    result: null as PlanResult | null,
+    selectedIndex: 0,
+    solutionStates: [] as SolutionEditState[],
+    errorMessage: null as string | null,
+    lastPlanSettingsJson: null as string | null,
+    reoptimizing: false,
+    reoptimizeError: null as string | null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
@@ -210,9 +268,47 @@ export interface PlannerStore {
   resetToExample: () => void;
   clearGoals: () => void;
 
-  // NOTE for the results agent: this is the seam for plan-run state. Add
-  // fields here (e.g. `planResult`, `isPlanning`, `lockedTiles`) rather than
-  // creating a second store, so goals/arrangement/helpers stay in one place.
+  // -- Run state (project task spec, Task A/B) --------------------------
+
+  /** Quick/normal/thorough search time, persisted alongside settings. */
+  searchTime: SearchTime;
+  setSearchTime: (t: SearchTime) => void;
+
+  status: RunStatus;
+  progress: PlanProgress | null;
+  result: PlanResult | null;
+  /** Which solution tab (0 = Best) is shown. */
+  selectedIndex: number;
+  /** Per-solution displayed layout, locks and undo history; parallel to result.solutions. */
+  solutionStates: SolutionEditState[];
+  errorMessage: string | null;
+  /** JSON snapshot of the settings used for the last plan run, for the "settings changed" note. */
+  lastPlanSettingsJson: string | null;
+
+  /** Called by useRunPlanner as a run starts, progresses, and finishes. */
+  planStarted: (settingsUsed: PlanSettings) => void;
+  planProgress: (progress: PlanProgress) => void;
+  planSucceeded: (result: PlanResult) => void;
+  /** Aborted early: `best` is the last progress snapshot's best layout, if any. */
+  planStopped: (best: PlanResult['solutions'][number] | null) => void;
+  planFailed: (message: string) => void;
+
+  selectSolution: (index: number) => void;
+
+  // -- Editing (Task B) ---------------------------------------------------
+
+  placeCrop: (cropId: CropId, x: number, y: number) => { ok: boolean; message: string | null };
+  eraseCrop: (x: number, y: number) => { ok: boolean; message: string | null };
+  toggleLockPlantAt: (x: number, y: number) => void;
+  toggleLockPlotAt: (x: number, y: number) => void;
+  unlockAllForSelected: () => void;
+  undoEdit: () => void;
+
+  reoptimizing: boolean;
+  reoptimizeError: string | null;
+  reoptimizeStarted: () => void;
+  reoptimizeSucceeded: (index: number, placements: Placement[]) => void;
+  reoptimizeFailed: (message: string) => void;
 }
 
 function initialPersistedState(): PersistedShape {
@@ -221,17 +317,20 @@ function initialPersistedState(): PersistedShape {
       settings: defaultSettings(),
       customPlots: [],
       spaceLimit: defaultSpaceLimit(),
+      searchTime: 'normal',
     }
   );
 }
 
-export const useStore = create<PlannerStore>()((set) => {
+export const useStore = create<PlannerStore>()((set, get) => {
   const init = initialPersistedState();
 
   return {
     settings: init.settings,
     customPlots: init.customPlots,
     spaceLimit: init.spaceLimit,
+    searchTime: init.searchTime,
+    ...clearedRunState(),
 
     setPlotCount: (n) =>
       set((state) => ({
@@ -325,17 +424,183 @@ export const useStore = create<PlannerStore>()((set) => {
         settings: defaultSettings(),
         customPlots: [],
         spaceLimit: defaultSpaceLimit(),
+        ...clearedRunState(),
       })),
 
     clearGoals: () =>
       set((state) => ({
         settings: { ...state.settings, goals: [] },
       })),
+
+    // -- Run state ----------------------------------------------------
+
+    setSearchTime: (t) => set({ searchTime: t }),
+
+    planStarted: (settingsUsed) =>
+      set({
+        ...clearedRunState(),
+        status: 'running',
+        lastPlanSettingsJson: JSON.stringify(settingsUsed),
+      }),
+
+    planProgress: (progress) => set({ progress }),
+
+    planSucceeded: (result) =>
+      set({
+        status: 'done',
+        result,
+        selectedIndex: 0,
+        solutionStates: freshSolutionStates(result),
+        progress: null,
+      }),
+
+    planStopped: (best) =>
+      set(() => {
+        if (!best) {
+          return { status: 'stopped' as RunStatus, result: null, solutionStates: [], selectedIndex: 0, progress: null };
+        }
+        const result: PlanResult = { solutions: [best], arrangementsTried: 1, elapsedMs: 0 };
+        return {
+          status: 'stopped' as RunStatus,
+          result,
+          selectedIndex: 0,
+          solutionStates: freshSolutionStates(result),
+          progress: null,
+        };
+      }),
+
+    planFailed: (message) =>
+      set({ status: 'error', errorMessage: message, result: null, solutionStates: [], progress: null }),
+
+    selectSolution: (index) =>
+      set((s) => (s.result && index >= 0 && index < s.result.solutions.length ? { selectedIndex: index } : {})),
+
+    // -- Editing --------------------------------------------------------
+
+    placeCrop: (cropId, x, y) => {
+      const s = get();
+      const solution = s.result?.solutions[s.selectedIndex];
+      const editState = s.solutionStates[s.selectedIndex];
+      if (!solution || !editState) return { ok: false, message: null };
+
+      const garden = buildGarden(solution.plots);
+      const outcome = placeCropAt(garden, CROP_BY_ID, editState.placements, editState.lockedTiles, cropId, x, y);
+      if (outcome.changed) {
+        const index = s.selectedIndex;
+        set((st) => ({
+          solutionStates: st.solutionStates.map((es, i) =>
+            i === index ? { placements: outcome.placements, lockedTiles: es.lockedTiles, history: withHistory(es) } : es,
+          ),
+        }));
+      }
+      return { ok: outcome.changed, message: outcome.message };
+    },
+
+    eraseCrop: (x, y) => {
+      const s = get();
+      const solution = s.result?.solutions[s.selectedIndex];
+      const editState = s.solutionStates[s.selectedIndex];
+      if (!solution || !editState) return { ok: false, message: null };
+
+      const garden = buildGarden(solution.plots);
+      const outcome = eraseAt(garden, CROP_BY_ID, editState.placements, editState.lockedTiles, x, y);
+      if (outcome.changed) {
+        const index = s.selectedIndex;
+        set((st) => ({
+          solutionStates: st.solutionStates.map((es, i) =>
+            i === index ? { placements: outcome.placements, lockedTiles: es.lockedTiles, history: withHistory(es) } : es,
+          ),
+        }));
+      }
+      return { ok: outcome.changed, message: outcome.message };
+    },
+
+    toggleLockPlantAt: (x, y) =>
+      set((s) => {
+        const index = s.selectedIndex;
+        const solution = s.result?.solutions[index];
+        const editState = s.solutionStates[index];
+        if (!solution || !editState) return {};
+        const garden = buildGarden(solution.plots);
+        const lockedTiles = toggleLockAtTile(garden, CROP_BY_ID, editState.placements, editState.lockedTiles, x, y);
+        return {
+          solutionStates: s.solutionStates.map((es, i) =>
+            i === index ? { placements: es.placements, lockedTiles, history: withHistory(es) } : es,
+          ),
+        };
+      }),
+
+    toggleLockPlotAt: (x, y) =>
+      set((s) => {
+        const index = s.selectedIndex;
+        const solution = s.result?.solutions[index];
+        const editState = s.solutionStates[index];
+        if (!solution || !editState) return {};
+        const garden = buildGarden(solution.plots);
+        const lockedTiles = computeLockPlotToggle(garden, editState.lockedTiles, x, y);
+        return {
+          solutionStates: s.solutionStates.map((es, i) =>
+            i === index ? { placements: es.placements, lockedTiles, history: withHistory(es) } : es,
+          ),
+        };
+      }),
+
+    unlockAllForSelected: () =>
+      set((s) => {
+        const index = s.selectedIndex;
+        const editState = s.solutionStates[index];
+        if (!editState || editState.lockedTiles.length === 0) return {};
+        return {
+          solutionStates: s.solutionStates.map((es, i) =>
+            i === index ? { placements: es.placements, lockedTiles: [], history: withHistory(es) } : es,
+          ),
+        };
+      }),
+
+    undoEdit: () =>
+      set((s) => {
+        const index = s.selectedIndex;
+        const es = s.solutionStates[index];
+        if (!es || es.history.length === 0) return {};
+        const last = es.history[es.history.length - 1];
+        const updated: SolutionEditState = {
+          placements: last.placements,
+          lockedTiles: last.lockedTiles,
+          history: es.history.slice(0, -1),
+        };
+        return { solutionStates: s.solutionStates.map((e, i) => (i === index ? updated : e)) };
+      }),
+
+    reoptimizeStarted: () => set({ reoptimizing: true, reoptimizeError: null }),
+
+    reoptimizeSucceeded: (index, placements) =>
+      set((s) => {
+        const es = s.solutionStates[index];
+        if (!es) return { reoptimizing: false };
+        const updated: SolutionEditState = { placements, lockedTiles: es.lockedTiles, history: withHistory(es) };
+        return {
+          reoptimizing: false,
+          solutionStates: s.solutionStates.map((e, i) => (i === index ? updated : e)),
+        };
+      }),
+
+    reoptimizeFailed: (message) => set({ reoptimizing: false, reoptimizeError: message }),
   };
 });
 
+/** True once the current settings differ from the settings used for the last plan run. */
+export function isStaleResult(state: PlannerStore): boolean {
+  return state.lastPlanSettingsJson !== null && JSON.stringify(state.settings) !== state.lastPlanSettingsJson;
+}
+
 // Persist on every change. Kept outside the actions above so callers can't
-// forget to save, and so the save logic stays in one place.
+// forget to save, and so the save logic stays in one place. Run state
+// (status/progress/result/edits) is deliberately not persisted.
 useStore.subscribe((state) => {
-  writePersisted({ settings: state.settings, customPlots: state.customPlots, spaceLimit: state.spaceLimit });
+  writePersisted({
+    settings: state.settings,
+    customPlots: state.customPlots,
+    spaceLimit: state.spaceLimit,
+    searchTime: state.searchTime,
+  });
 });

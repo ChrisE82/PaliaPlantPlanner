@@ -247,7 +247,8 @@ export function arrangementLabel(plots: readonly PlotPos[]): string {
     .filter((runs): runs is number[] => runs !== null)
     .map(longerRunsFirst)
     .sort((a, b) => a.length - b.length || compareRunsLongerFirst(a, b));
-  return options.length > 0 ? formatRunLengths(options[0]) : 'Custom shape';
+  // More than 3 runs is hard to read as text; the UI draws the shape instead.
+  return options.length > 0 && options[0].length <= 3 ? formatRunLengths(options[0]) : 'Custom shape';
 }
 
 function compareRunsLongerFirst(a: readonly number[], b: readonly number[]): number {

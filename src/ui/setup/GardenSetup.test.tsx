@@ -60,4 +60,45 @@ describe('GardenSetup', () => {
     }
     expect(useStore.getState().settings.plotCount).toBe(9);
   });
+
+  it('offers Quick, Normal and Thorough search time, defaulting to Normal', () => {
+    render(<GardenSetup />);
+    const select = screen.getByLabelText('Search time') as HTMLSelectElement;
+    expect(select.value).toBe('normal');
+    expect(screen.getByRole('option', { name: 'Quick' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Thorough' })).toBeTruthy();
+  });
+
+  it('changing the search time updates the store', async () => {
+    const user = userEvent.setup();
+    render(<GardenSetup />);
+    await user.selectOptions(screen.getByLabelText('Search time'), 'thorough');
+    expect(useStore.getState().searchTime).toBe('thorough');
+  });
+
+  it('disables Plan my garden and relabels it while a run is in progress', () => {
+    useStore.getState().planStarted(useStore.getState().settings);
+    render(<GardenSetup />);
+    const button = screen.getByRole('button', { name: 'Planning...' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.queryByText(/before planning/)).toBeNull();
+  });
+
+  it('restores the stored space limit on blur instead of leaving a blank or stale value', async () => {
+    const user = userEvent.setup();
+    useStore.getState().setSpaceLimit(15, 12);
+    render(<GardenSetup />);
+    const width = screen.getByLabelText('Width') as HTMLInputElement;
+    expect(width.value).toBe('15');
+
+    await user.clear(width);
+    await user.tab();
+    expect(width.value).toBe(''); // blank commits null immediately: "no limit"
+    expect(useStore.getState().spaceLimit.width).toBeNull();
+
+    await user.type(width, '0'); // below the min of 1: not committed
+    expect(width.value).toBe('0');
+    await user.tab();
+    expect(width.value).toBe(''); // reflects the actual stored value, not the stale "0"
+  });
 });

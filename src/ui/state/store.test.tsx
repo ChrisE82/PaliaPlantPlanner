@@ -33,8 +33,8 @@ describe('planner store defaults', () => {
     expect(s.goals.map((g) => [g.crop, g.measure, g.amount, g.importance])).toEqual([
       ['apple', 'quantity', { kind: 'count', n: 4 }, 'must'],
       ['apple', 'harvestBoost', { kind: 'all' }, 'high'],
-      ['wheat', 'quantity', { kind: 'max' }, 'medium'],
-      [ALL_GOAL_CROPS, 'waterRetain', { kind: 'all' }, 'low'],
+      [ALL_GOAL_CROPS, 'waterRetain', { kind: 'all' }, 'medium'],
+      ['wheat', 'quantity', { kind: 'max' }, 'low'],
     ]);
     expect(new Set(s.goals.map((g) => g.id)).size).toBe(4);
     expect(s.helpers).toEqual(['corn', 'potato', 'carrot']);
@@ -124,7 +124,7 @@ describe('goal editing', () => {
 
   it('changing measure from a buff to quantity turns All plants into count 1 and All goal crops into tomato', async () => {
     const { useStore } = await freshStore();
-    const goal = useStore.getState().settings.goals[3]; // ALL_GOAL_CROPS / waterRetain / all / low
+    const goal = useStore.getState().settings.goals[2]; // ALL_GOAL_CROPS / waterRetain / all / medium
     expect(goal.crop).toBe(ALL_GOAL_CROPS);
     useStore.getState().updateGoal(goal.id, { measure: 'quantity' });
     const updated = useStore.getState().settings.goals.find((g) => g.id === goal.id)!;
@@ -223,5 +223,243 @@ describe('persistence', () => {
     vi.resetModules();
     const { useStore } = await import('./store');
     expect(useStore.getState().settings.goals.length).toBe(defaultSettings().goals.length);
+  });
+
+  it('defaults searchTime to normal and persists a change', async () => {
+    const { useStore, STORAGE_KEY } = await freshStore();
+    expect(useStore.getState().searchTime).toBe('normal');
+
+    useStore.getState().setSearchTime('thorough');
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(saved.searchTime).toBe('thorough');
+
+    vi.resetModules();
+    const reloaded = await import('./store');
+    expect(reloaded.useStore.getState().searchTime).toBe('thorough');
+  });
+
+  it('defaults searchTime to normal for a save written before that field existed', async () => {
+    const { STORAGE_KEY, defaultSettings, defaultSpaceLimit } = await freshStore();
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ settings: defaultSettings(), customPlots: [], spaceLimit: defaultSpaceLimit() }),
+    );
+    vi.resetModules();
+    const reloaded = await import('./store');
+    expect(reloaded.useStore.getState().searchTime).toBe('normal');
+  });
+});
+
+describe('run state', () => {
+  it('starts idle with no result', async () => {
+    const { useStore } = await freshStore();
+    expect(useStore.getState().status).toBe('idle');
+    expect(useStore.getState().result).toBeNull();
+    expect(useStore.getState().solutionStates).toEqual([]);
+  });
+
+  it('planStarted marks running, clears any previous result and error, and snapshots the settings used', async () => {
+    const { useStore } = await freshStore();
+    const settings = useStore.getState().settings;
+    useStore.getState().planStarted(settings);
+    const s = useStore.getState();
+    expect(s.status).toBe('running');
+    expect(s.result).toBeNull();
+    expect(s.errorMessage).toBeNull();
+    expect(s.lastPlanSettingsJson).toBe(JSON.stringify(settings));
+  });
+
+  it('planProgress records the latest progress', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planStarted(useStore.getState().settings);
+    useStore.getState().planProgress({ stage: 'refining', done: 2, total: 8, best: null });
+    expect(useStore.getState().progress).toEqual({ stage: 'refining', done: 2, total: 8, best: null });
+  });
+
+  it('planSucceeded stores the result and seeds one edit state per solution', async () => {
+    const { useStore } = await freshStore();
+    const result = {
+      solutions: [
+        { plots: [{ x: 0, y: 0 }], placements: [{ cropId: 'apple', x: 0, y: 0 }], score: [], label: '1 plot' },
+        { plots: [{ x: 0, y: 0 }], placements: [], score: [], label: 'Row of 1' },
+      ],
+      arrangementsTried: 2,
+      elapsedMs: 10,
+    };
+    useStore.getState().planSucceeded(result);
+    const s = useStore.getState();
+    expect(s.status).toBe('done');
+    expect(s.selectedIndex).toBe(0);
+    expect(s.solutionStates.length).toBe(2);
+    expect(s.solutionStates[0]).toEqual({ placements: result.solutions[0].placements, lockedTiles: [], history: [] });
+  });
+
+  it('planStopped with a best-so-far layout stores it as a one-solution result', async () => {
+    const { useStore } = await freshStore();
+    const best = { plots: [{ x: 0, y: 0 }], placements: [{ cropId: 'wheat', x: 0, y: 0 }], score: [], label: '1 plot' };
+    useStore.getState().planStopped(best);
+    const s = useStore.getState();
+    expect(s.status).toBe('stopped');
+    expect(s.result?.solutions).toEqual([best]);
+    expect(s.solutionStates[0].placements).toEqual(best.placements);
+  });
+
+  it('planStopped with no best-so-far layout leaves the result empty', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planStopped(null);
+    const s = useStore.getState();
+    expect(s.status).toBe('stopped');
+    expect(s.result).toBeNull();
+  });
+
+  it('planFailed records the status and message', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planFailed('Worker crashed');
+    const s = useStore.getState();
+    expect(s.status).toBe('error');
+    expect(s.errorMessage).toBe('Worker crashed');
+    expect(s.result).toBeNull();
+  });
+
+  it('selectSolution clamps to a valid index', async () => {
+    const { useStore } = await freshStore();
+    const result = {
+      solutions: [
+        { plots: [{ x: 0, y: 0 }], placements: [], score: [], label: 'a' },
+        { plots: [{ x: 0, y: 0 }], placements: [], score: [], label: 'b' },
+      ],
+      arrangementsTried: 2,
+      elapsedMs: 1,
+    };
+    useStore.getState().planSucceeded(result);
+    useStore.getState().selectSolution(1);
+    expect(useStore.getState().selectedIndex).toBe(1);
+    useStore.getState().selectSolution(5); // out of range: ignored
+    expect(useStore.getState().selectedIndex).toBe(1);
+  });
+});
+
+describe('isStaleResult', () => {
+  it('is false before any plan and right after one', async () => {
+    const { useStore, isStaleResult } = await freshStore();
+    expect(isStaleResult(useStore.getState())).toBe(false);
+    useStore.getState().planStarted(useStore.getState().settings);
+    expect(isStaleResult(useStore.getState())).toBe(false);
+  });
+
+  it('becomes true once settings change after a plan', async () => {
+    const { useStore, isStaleResult } = await freshStore();
+    useStore.getState().planStarted(useStore.getState().settings);
+    useStore.getState().setPlotCount(3);
+    expect(isStaleResult(useStore.getState())).toBe(true);
+  });
+});
+
+describe('editing', () => {
+  const onePlotResult = () => ({
+    solutions: [{ plots: [{ x: 0, y: 0 }], placements: [{ cropId: 'apple', x: 0, y: 0 }], score: [], label: '1 plot' }],
+    arrangementsTried: 1,
+    elapsedMs: 1,
+  });
+
+  it('placeCrop replaces overlapped crops and records an outcome', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded({
+      solutions: [{ plots: [{ x: 0, y: 0 }], placements: [], score: [], label: '1 plot' }],
+      arrangementsTried: 1,
+      elapsedMs: 1,
+    });
+    const outcome = useStore.getState().placeCrop('wheat', 1, 1);
+    expect(outcome).toEqual({ ok: true, message: null });
+    expect(useStore.getState().solutionStates[0].placements).toEqual([{ cropId: 'wheat', x: 1, y: 1 }]);
+  });
+
+  it('eraseCrop removes the plant at the tapped tile', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded(onePlotResult());
+    const outcome = useStore.getState().eraseCrop(1, 1);
+    expect(outcome).toEqual({ ok: true, message: null });
+    expect(useStore.getState().solutionStates[0].placements).toEqual([]);
+  });
+
+  it('toggleLockPlantAt locks and unlocks all of a plant\'s tiles', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded(onePlotResult());
+    useStore.getState().toggleLockPlantAt(1, 1);
+    expect(useStore.getState().solutionStates[0].lockedTiles.length).toBe(9);
+    useStore.getState().toggleLockPlantAt(0, 0);
+    expect(useStore.getState().solutionStates[0].lockedTiles).toEqual([]);
+  });
+
+  it('toggleLockPlotAt locks and unlocks all 9 tiles of the plot', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded(onePlotResult());
+    useStore.getState().toggleLockPlotAt(2, 2);
+    expect(useStore.getState().solutionStates[0].lockedTiles.length).toBe(9);
+    useStore.getState().toggleLockPlotAt(0, 0);
+    expect(useStore.getState().solutionStates[0].lockedTiles).toEqual([]);
+  });
+
+  it('unlockAllForSelected clears every lock on the selected solution', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded(onePlotResult());
+    useStore.getState().toggleLockPlotAt(0, 0);
+    useStore.getState().unlockAllForSelected();
+    expect(useStore.getState().solutionStates[0].lockedTiles).toEqual([]);
+  });
+
+  it('undoEdit reverts the last edit and can be repeated up to the start', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded(onePlotResult());
+    useStore.getState().eraseCrop(1, 1);
+    useStore.getState().placeCrop('wheat', 1, 1);
+    expect(useStore.getState().solutionStates[0].placements).toEqual([{ cropId: 'wheat', x: 1, y: 1 }]);
+
+    useStore.getState().undoEdit();
+    expect(useStore.getState().solutionStates[0].placements).toEqual([]);
+
+    useStore.getState().undoEdit();
+    expect(useStore.getState().solutionStates[0].placements).toEqual([{ cropId: 'apple', x: 0, y: 0 }]);
+
+    useStore.getState().undoEdit(); // nothing left to undo: no-op
+    expect(useStore.getState().solutionStates[0].placements).toEqual([{ cropId: 'apple', x: 0, y: 0 }]);
+  });
+
+  it('a new plan clears locks and edit history', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded(onePlotResult());
+    useStore.getState().eraseCrop(1, 1);
+    useStore.getState().toggleLockPlotAt(0, 0);
+    expect(useStore.getState().solutionStates[0].lockedTiles.length).toBe(9);
+    expect(useStore.getState().solutionStates[0].history.length).toBe(2);
+
+    useStore.getState().planSucceeded(onePlotResult());
+    expect(useStore.getState().solutionStates[0].lockedTiles).toEqual([]);
+    expect(useStore.getState().solutionStates[0].history).toEqual([]);
+  });
+
+  it('reoptimizeSucceeded replaces the placements and keeps the locks', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded(onePlotResult());
+    useStore.getState().toggleLockPlantAt(1, 1);
+    useStore.getState().reoptimizeStarted();
+    expect(useStore.getState().reoptimizing).toBe(true);
+
+    useStore.getState().reoptimizeSucceeded(0, [{ cropId: 'wheat', x: 1, y: 1 }]);
+    const s = useStore.getState();
+    expect(s.reoptimizing).toBe(false);
+    expect(s.solutionStates[0].placements).toEqual([{ cropId: 'wheat', x: 1, y: 1 }]);
+    expect(s.solutionStates[0].lockedTiles.length).toBe(9);
+  });
+
+  it('reoptimizeFailed records a message without changing placements', async () => {
+    const { useStore } = await freshStore();
+    useStore.getState().planSucceeded(onePlotResult());
+    useStore.getState().reoptimizeStarted();
+    useStore.getState().reoptimizeFailed('No layout found.');
+    const s = useStore.getState();
+    expect(s.reoptimizing).toBe(false);
+    expect(s.reoptimizeError).toBe('No layout found.');
+    expect(s.solutionStates[0].placements).toEqual([{ cropId: 'apple', x: 0, y: 0 }]);
   });
 });

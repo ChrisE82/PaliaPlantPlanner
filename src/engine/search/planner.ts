@@ -5,7 +5,7 @@
  * and the fixed / custom / suggest arrangement-screening pipeline.
  */
 import { CROP_BY_ID } from '../../data/crops';
-import { arrangementLabel, enumerateArrangements, fitsSpace } from '../arrangement';
+import { arrangementLabel, enumerateArrangements, fitsSpace, sharedPlotEdges } from '../arrangement';
 import { buildGarden, normalizePlots } from '../garden';
 import { compareScores } from '../score';
 import type {
@@ -215,6 +215,8 @@ function deriveSeed(base: number, salt: number): number {
 // Full plan(): fixed / custom / suggest
 // ---------------------------------------------------------------------------
 
+/** Score entries for the four importance levels plus filled tiles (see types.ts ScoreVector). */
+const GOAL_AND_FILL_ENTRIES = 9;
 const REFINE_CANDIDATES = 24;
 const FINISH_CANDIDATES = 3;
 const MIN_TASK_TIME_MS = 5;
@@ -329,7 +331,18 @@ async function planSuggest(
   // always taken from the best found anywhere.
   const foundByCandidate = new Map<number, Found[]>();
   const bestOf = (index: number): Found | undefined => foundByCandidate.get(index)?.[0];
+
+  // Arrangements are ranked by score, except that when the goal levels and
+  // filled tiles tie, the more compact arrangement (more shared plot edges)
+  // wins before the remaining tie-breakers (buffs no goal asked for).
+  const edges = allPlots.map((plots) => sharedPlotEdges(plots));
+  const compareArrangements = (aIndex: number, a: ScoreVector, bIndex: number, b: ScoreVector): number =>
+    compareScores(a.slice(0, GOAL_AND_FILL_ENTRIES), b.slice(0, GOAL_AND_FILL_ENTRIES)) ||
+    edges[aIndex] - edges[bIndex] ||
+    compareScores(a.slice(GOAL_AND_FILL_ENTRIES), b.slice(GOAL_AND_FILL_ENTRIES));
+
   let bestOverall: LayoutSolution | null = null;
+  let bestOverallIndex = -1;
 
   const record = (result: OptimizeResult) => {
     if (result.solutions.length === 0) return;
@@ -338,16 +351,17 @@ async function planSuggest(
     list.sort((a, b) => -compareScores(a.score, b.score));
     foundByCandidate.set(result.taskId, list);
     const top = list[0];
-    if (!bestOverall || compareScores(top.score, bestOverall.score) > 0) {
+    if (bestOverall === null || compareArrangements(result.taskId, top.score, bestOverallIndex, bestOverall.score) > 0) {
       const plots = allPlots[result.taskId];
       bestOverall = toSolution(plots, top, arrangementLabel(plots));
+      bestOverallIndex = result.taskId;
     }
   };
 
   const ranked = (candidates: readonly { index: number; plots: PlotPos[] }[]) =>
     candidates
       .filter((c) => bestOf(c.index) !== undefined)
-      .sort((a, b) => -compareScores(bestOf(a.index)!.score, bestOf(b.index)!.score));
+      .sort((a, b) => -compareArrangements(a.index, bestOf(a.index)!.score, b.index, bestOf(b.index)!.score));
 
   const runStage = async (
     stage: PlanProgress['stage'],

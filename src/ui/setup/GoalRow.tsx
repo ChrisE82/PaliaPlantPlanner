@@ -13,6 +13,7 @@ import {
   type PrecheckIssue,
 } from '../../engine/types';
 import { useStore } from '../state/store';
+import { useNumberField } from '../useNumberField';
 import { visibleCrops } from './cropVisibility';
 import IssueMessage from './IssueMessage';
 
@@ -56,14 +57,15 @@ export default function GoalRow({ goal, issues }: GoalRowProps) {
     updateGoal(goal.id, { amount });
   }
 
-  function handleAmountNumberChange(e: ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value;
-    if (raw === '') return; // let the field show empty while the user is mid-edit
-    const n = Number(raw);
-    if (Number.isFinite(n) && n >= 1) {
-      updateGoal(goal.id, { amount: { kind: 'count', n: Math.round(n) } });
-    }
-  }
+  // Blank has no meaning for a plant count, so it never commits; on blur the
+  // field snaps back to the stored value instead of staying blank or stale.
+  const amountField = useNumberField(
+    goal.amount.kind === 'count' ? goal.amount.n : 1,
+    (n) => {
+      if (n !== null) updateGoal(goal.id, { amount: { kind: 'count', n } });
+    },
+    { min: 1, allowNull: false },
+  );
 
   return (
     <div className="goal-row">
@@ -110,8 +112,9 @@ export default function GoalRow({ goal, issues }: GoalRowProps) {
               aria-label="Plant count"
               min={1}
               step={1}
-              value={goal.amount.n}
-              onChange={handleAmountNumberChange}
+              value={amountField.value}
+              onChange={amountField.onChange}
+              onBlur={amountField.onBlur}
             />
           )}
         </div>

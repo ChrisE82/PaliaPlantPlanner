@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import App from './App';
 import { useStore } from './state/store';
+import { PlannerClientProvider } from './state/plannerClient';
+import { createFakePlannerClient } from './testHelpers';
 import { CROP_DATA } from '../data/crops';
 
 beforeEach(() => {
@@ -13,9 +15,17 @@ afterEach(() => {
   cleanup();
 });
 
+function renderApp() {
+  return render(
+    <PlannerClientProvider client={createFakePlannerClient()}>
+      <App />
+    </PlannerClientProvider>,
+  );
+}
+
 describe('App', () => {
   it('renders the header, setup panel and results placeholder', () => {
-    render(<App />);
+    renderApp();
     expect(screen.getByRole('heading', { level: 1, name: 'Palia Plant Planner' })).toBeTruthy();
     expect(
       screen.getByText(
@@ -28,7 +38,7 @@ describe('App', () => {
   });
 
   it('links the crop-data note to the sources list', () => {
-    render(<App />);
+    renderApp();
     const link = screen.getByRole('link', { name: `Crop data checked ${CROP_DATA.checkedOn}` });
     expect(link.getAttribute('href')).toBe('#sources');
     expect(screen.getByRole('heading', { name: 'Crop data sources' })).toBeTruthy();

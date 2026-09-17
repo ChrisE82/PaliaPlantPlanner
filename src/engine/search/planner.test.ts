@@ -179,6 +179,25 @@ describe('planner.plan with runTasksSync', () => {
     }
   }, 30000);
 
+  it('prefers the most compact arrangement when goals and filled tiles tie', async () => {
+    // Only Wheat, only a Maximize goal: every 4-plot arrangement fills all 36
+    // tiles with Wheat and scores the same, so compactness decides.
+    const goals: Goal[] = [{ id: 'g1', crop: 'wheat', measure: 'quantity', amount: { kind: 'max' }, importance: 'high' }];
+    const request: PlanRequest = {
+      settings: {
+        plotCount: 4,
+        arrangement: { mode: 'suggest', maxWidth: null, maxHeight: null },
+        gardeningLevel: null,
+        goals,
+        helpers: [],
+      },
+      seed: 2,
+      timeBudgetMs: 400,
+    };
+    const result = await plan(request, runTasksSync, () => {});
+    expect(result.solutions[0].label).toBe('2x2 block');
+  }, 15000);
+
   it('rejects with an AbortError DOMException when the signal is already aborted', async () => {
     const goals: Goal[] = [{ id: 'g1', crop: 'wheat', measure: 'quantity', amount: { kind: 'max' }, importance: 'high' }];
     const request: PlanRequest = {

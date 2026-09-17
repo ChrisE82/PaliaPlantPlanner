@@ -1,8 +1,11 @@
 import { CROP_DATA } from '../data/crops';
 import ResultsPanel from './results/ResultsPanel';
+import { useRunPlanner } from './results/useRunPlanner';
 import GardenSetup from './setup/GardenSetup';
 
 export default function App() {
+  const { run, stop, reoptimize } = useRunPlanner();
+
   return (
     <div className="app">
       <header className="app-header">
@@ -16,10 +19,8 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {/* The results agent replaces ResultsPanel; wire its onClick handler
-            here once the planner can run (see GardenSetup's onPlan prop). */}
-        <GardenSetup />
-        <ResultsPanel />
+        <GardenSetup onPlan={run} />
+        <ResultsPanel onStop={stop} onReoptimize={reoptimize} />
       </main>
 
       <footer className="sources" id="sources" tabIndex={-1}>

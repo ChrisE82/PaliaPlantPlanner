@@ -22,6 +22,10 @@
   --buff-qualityBoost: #9b59b6;
   --buff-growthBoost: #22a06b;
 
+  /* Garden grid. */
+  --soil: #e4d9c2;
+  --plot-outline: #6b5a3d;
+
   --radius: 8px;
   --control-height: 36px;
   color-scheme: light;
@@ -40,6 +44,8 @@
     --warning-text: #f3cf7a;
     --error-bg: #3b1a18;
     --error-text: #f5a39c;
+    --soil: #3a3226;
+    --plot-outline: #cbb98c;
     color-scheme: dark;
   }
 }
@@ -606,14 +612,367 @@ label {
 }
 
 /* -------------------------------------------------------------------------
-   Results placeholder
+   Results panel
    ------------------------------------------------------------------------- */
 
-.results-panel {
+.results-panel > * + * {
+  margin-top: 1rem;
+}
+
+.results-panel--empty {
   min-height: 12rem;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   color: var(--muted);
+}
+
+.results-panel__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6em;
+}
+
+.results-panel__toolbar button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+/* -------------------------------------------------------------------------
+   Planning progress
+   ------------------------------------------------------------------------- */
+
+.progress-view__stage {
+  font-weight: 600;
+}
+
+.progress-view__bar {
+  display: block;
+  width: 100%;
+  height: 0.9em;
+  accent-color: var(--accent);
+}
+
+.progress-view__actions {
+  margin-top: 0.6em;
+}
+
+.progress-view__best {
+  margin-top: 1rem;
+}
+
+.progress-view__best-label {
+  font-weight: 600;
+  margin-bottom: 0.4em;
+}
+
+/* -------------------------------------------------------------------------
+   Garden grid
+   ------------------------------------------------------------------------- */
+
+.garden-grid__wrap {
+  width: 100%;
+}
+
+.garden-grid {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.garden-grid__tile {
+  fill: var(--soil);
+  stroke: var(--border);
+  stroke-width: 0.03;
+}
+
+.garden-grid__locked-empty {
+  pointer-events: none;
+}
+
+.garden-grid__hatch-line {
+  stroke: var(--muted);
+  stroke-width: 0.07;
+}
+
+.garden-grid__plot-outline {
+  fill: none;
+  stroke: var(--plot-outline);
+  stroke-width: 0.09;
+  pointer-events: none;
+}
+
+.garden-grid__placement {
+  cursor: pointer;
+}
+
+.garden-grid__placement:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.garden-grid__placement--selected .garden-grid__crop {
+  stroke: var(--accent);
+  stroke-width: 0.09;
+}
+
+.garden-grid__abbr {
+  font-size: 0.34px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.garden-grid__name {
+  font-size: 0.15px;
+  pointer-events: none;
+}
+
+.garden-grid__dot {
+  stroke-width: 0.045;
+}
+
+.garden-grid__dot--waterRetain {
+  fill: var(--buff-waterRetain);
+  stroke: var(--buff-waterRetain);
+}
+
+.garden-grid__dot--weedBlock {
+  fill: var(--buff-weedBlock);
+  stroke: var(--buff-weedBlock);
+}
+
+.garden-grid__dot--harvestBoost {
+  fill: var(--buff-harvestBoost);
+  stroke: var(--buff-harvestBoost);
+}
+
+.garden-grid__dot--qualityBoost {
+  fill: var(--buff-qualityBoost);
+  stroke: var(--buff-qualityBoost);
+}
+
+.garden-grid__dot--growthBoost {
+  fill: var(--buff-growthBoost);
+  stroke: var(--buff-growthBoost);
+}
+
+.garden-grid__dot--hollow {
+  fill: var(--panel);
+}
+
+.garden-grid__lock-mark-bg {
+  fill: var(--panel);
+  opacity: 0.85;
+}
+
+.garden-grid__lock-mark-shackle {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 0.035;
+}
+
+.garden-grid__lock-mark-body {
+  fill: var(--text);
+}
+
+.garden-grid__preview {
+  fill: none;
+  stroke-width: 0.09;
+  pointer-events: none;
+}
+
+.garden-grid__preview--valid {
+  stroke: var(--accent);
+}
+
+.garden-grid__preview--invalid {
+  stroke: var(--error-text);
+  stroke-dasharray: 0.15 0.1;
+}
+
+.garden-grid__legend {
+  list-style: none;
+  margin: 0.75em 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 1em;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.garden-grid__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.garden-grid__legend-dot {
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  display: inline-block;
+  border: 2px solid transparent;
+}
+
+.garden-grid__legend-dot.garden-grid__dot--hollow {
+  border-color: var(--muted);
+  background: var(--panel);
+}
+
+.garden-grid__legend-dot--hollow {
+  border: 2px solid var(--muted);
+  background: var(--panel);
+}
+
+/* -------------------------------------------------------------------------
+   Option tabs
+   ------------------------------------------------------------------------- */
+
+.option-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6em;
+}
+
+.option-tabs__tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  text-align: left;
+}
+
+.option-tabs__tab--selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+.option-tabs__thumb {
+  width: 1.8em;
+  height: 1.8em;
+  flex: 0 0 auto;
+}
+
+.option-tabs__thumb rect {
+  fill: var(--muted);
+}
+
+.option-tabs__tab--selected .option-tabs__thumb rect {
+  fill: var(--accent);
+}
+
+.option-tabs__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.option-tabs__name {
+  font-weight: 600;
+}
+
+.option-tabs__arrangement {
+  font-size: 0.85em;
+}
+
+/* -------------------------------------------------------------------------
+   Tables: goal summary, compare options, shopping list
+   ------------------------------------------------------------------------- */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.goal-summary,
+.compare-table,
+.shopping-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+
+.goal-summary caption,
+.compare-table caption,
+.shopping-list caption {
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+}
+
+.goal-summary th,
+.goal-summary td,
+.compare-table th,
+.compare-table td,
+.shopping-list th,
+.shopping-list td {
+  text-align: left;
+  padding: 0.45em 0.6em;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.goal-summary__row--met {
+  color: var(--text);
+}
+
+.goal-summary__row--partial td:first-child,
+.goal-summary__row--unmet td:first-child {
+  font-weight: 600;
+}
+
+.shopping-list__total {
+  margin-top: 0.6em;
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------
+   Plant details
+   ------------------------------------------------------------------------- */
+
+.plant-details h3 {
+  margin: 0 0 0.4em;
+  font-size: 1.05em;
+}
+
+.plant-details h4 {
+  margin: 0.75em 0 0.3em;
+  font-size: 0.95em;
+}
+
+.plant-details__buffs,
+.plant-details__goals {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+/* -------------------------------------------------------------------------
+   Edit toolbar and crop palette
+   ------------------------------------------------------------------------- */
+
+.edit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em 1.2em;
+  align-items: center;
+}
+
+.edit-toolbar__tools,
+.edit-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+}
+
+.edit-toolbar__tool[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+.crop-palette fieldset {
+  margin: 0.6em 0;
+}
+
+.crop-palette legend {
+  margin-bottom: 0.35em;
 }

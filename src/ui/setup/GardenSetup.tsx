@@ -1,8 +1,10 @@
-import { useMemo, type ChangeEvent } from 'react';
+import { useMemo } from 'react';
 import { CROPS } from '../../data/crops';
 import { precheck } from '../../engine/precheck';
 import { RULES } from '../../engine/rules';
+import { SEARCH_TIME_OPTIONS, type SearchTime } from '../results/planTiming';
 import { useStore } from '../state/store';
+import { useNumberField } from '../useNumberField';
 import ArrangementEditor from './ArrangementEditor';
 import GardeningLevelField from './GardeningLevelField';
 import GoalList from './GoalList';
@@ -21,22 +23,19 @@ export default function GardenSetup({ onPlan }: GardenSetupProps) {
   const setPlotCount = useStore((s) => s.setPlotCount);
   const setArrangementMode = useStore((s) => s.setArrangementMode);
   const setSpaceLimit = useStore((s) => s.setSpaceLimit);
+  const searchTime = useStore((s) => s.searchTime);
+  const setSearchTime = useStore((s) => s.setSearchTime);
+  const status = useStore((s) => s.status);
 
   const issues = useMemo(() => precheck(settings, CROPS), [settings]);
   const errorCount = useMemo(() => issues.filter((i) => i.severity === 'error').length, [issues]);
-  const canPlan = errorCount === 0;
+  const isRunning = status === 'running';
+  const canPlan = errorCount === 0 && !isRunning;
 
   const isSuggest = settings.arrangement.mode === 'suggest';
 
-  function handleWidthChange(e: ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value;
-    setSpaceLimit(raw === '' ? null : Math.max(1, Math.round(Number(raw))), spaceLimit.height);
-  }
-
-  function handleHeightChange(e: ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value;
-    setSpaceLimit(spaceLimit.width, raw === '' ? null : Math.max(1, Math.round(Number(raw))));
-  }
+  const widthField = useNumberField(spaceLimit.width, (w) => setSpaceLimit(w, spaceLimit.height), { min: 1 });
+  const heightField = useNumberField(spaceLimit.height, (h) => setSpaceLimit(spaceLimit.width, h), { min: 1 });
 
   return (
     <section className="panel setup-panel" aria-label="Garden setup">
@@ -104,8 +103,9 @@ export default function GardenSetup({ onPlan }: GardenSetupProps) {
                 type="number"
                 min={1}
                 step={1}
-                value={spaceLimit.width ?? ''}
-                onChange={handleWidthChange}
+                value={widthField.value}
+                onChange={widthField.onChange}
+                onBlur={widthField.onBlur}
               />
               <label htmlFor="space-limit-height">Height</label>
               <input
@@ -113,8 +113,9 @@ export default function GardenSetup({ onPlan }: GardenSetupProps) {
                 type="number"
                 min={1}
                 step={1}
-                value={spaceLimit.height ?? ''}
-                onChange={handleHeightChange}
+                value={heightField.value}
+                onChange={heightField.onChange}
+                onBlur={heightField.onBlur}
               />
             </div>
             <p className="field-hint">Only suggest arrangements that fit this space, in either direction.</p>
@@ -139,10 +140,24 @@ export default function GardenSetup({ onPlan }: GardenSetupProps) {
       </section>
 
       <div className="plan-action">
+        <div className="field">
+          <label htmlFor="search-time">Search time</label>
+          <select
+            id="search-time"
+            value={searchTime}
+            onChange={(e) => setSearchTime(e.target.value as SearchTime)}
+          >
+            {SEARCH_TIME_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <button type="button" className="primary" disabled={!canPlan} onClick={onPlan}>
-          Plan my garden
+          {isRunning ? 'Planning...' : 'Plan my garden'}
         </button>
-        {!canPlan && (
+        {!canPlan && errorCount > 0 && (
           <p className="plan-action__reason">
             {errorCount === 1 ? 'Fix the error above before planning.' : `Fix the ${errorCount} errors above before planning.`}
           </p>

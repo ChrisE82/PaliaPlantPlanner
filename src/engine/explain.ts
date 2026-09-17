@@ -79,7 +79,15 @@ function goalValue(ctx: ScoreContext, goal: Goal, stats: LayoutStats): string {
 /** Other goals at a strictly higher importance, formatted for the "Space went to" reason. */
 function higherImportanceReason(ctx: ScoreContext, goal: Goal): string | null {
   const level = IMPORTANCE_ORDER.indexOf(goal.importance);
-  const higher = ctx.goals.filter((g) => IMPORTANCE_ORDER.indexOf(g.importance) < level);
+  // Name the goals that take the most space first: Maximize, then quantity
+  // targets, then buff goals; more important first within each kind.
+  const spaceRank = (g: Goal) => (g.measure !== 'quantity' ? 2 : g.amount.kind === 'max' ? 0 : 1);
+  const higher = ctx.goals
+    .filter((g) => IMPORTANCE_ORDER.indexOf(g.importance) < level)
+    .sort(
+      (a, b) =>
+        spaceRank(a) - spaceRank(b) || IMPORTANCE_ORDER.indexOf(a.importance) - IMPORTANCE_ORDER.indexOf(b.importance),
+    );
   if (higher.length === 0) return null;
 
   const labels = higher.slice(0, 2).map((g) => `${goalLabel(g, ctx.cropsById)} (${IMPORTANCE_NAMES[g.importance]})`);

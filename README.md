@@ -22,7 +22,7 @@ Fan-made tool. Not affiliated with or endorsed by Singularity 6. Palia is a trad
 
 Each importance level has two scores: one for its targets (quantity numbers and buff goals) and one for its Maximize goals. Layouts are compared in this order: Must targets, Must maximize, High targets, High maximize, Medium, then Low. The first score that differs decides. So a higher importance level takes all the space it needs before lower levels count, and within a level, targets are met before Maximize goals get space.
 
-Maximize goals with the same importance share space evenly. If everything else is tied, the planner prefers more filled tiles, then more buffs on goal crops, then goal crops over helpers.
+Maximize goals with the same importance share space evenly. If everything else is tied, the planner prefers more filled tiles, then a more compact plot arrangement, then more buffs on goal crops, then goal crops over helpers.
 
 The search runs in your browser in Web Workers. It uses late acceptance hill climbing, which accepts a change when the result is at least as good as the current layout or as the layout from a fixed number of steps earlier.
 

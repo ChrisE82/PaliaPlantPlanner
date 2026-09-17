@@ -37,4 +37,31 @@ describe('GardeningLevelField', () => {
     await user.clear(input);
     expect(useStore.getState().settings.gardeningLevel).toBeNull();
   });
+
+  it('leaving the field blank on blur stays blank, matching "no limit"', async () => {
+    useStore.getState().setGardeningLevel(5);
+    const user = userEvent.setup();
+    render(<GardeningLevelField />);
+    const input = screen.getByLabelText('Your Gardening level') as HTMLInputElement;
+    await user.clear(input);
+    await user.tab(); // blur
+    expect(input.value).toBe('');
+    expect(useStore.getState().settings.gardeningLevel).toBeNull();
+  });
+
+  it('typing a value below the minimum never commits, and blur restores the stored value', async () => {
+    useStore.getState().setGardeningLevel(5);
+    const user = userEvent.setup();
+    render(<GardeningLevelField />);
+    const input = screen.getByLabelText('Your Gardening level') as HTMLInputElement;
+
+    await user.clear(input);
+    await user.type(input, '0');
+    expect(input.value).toBe('0'); // shown while typing, even though not yet committed
+    expect(useStore.getState().settings.gardeningLevel).toBeNull(); // clearing already committed null
+
+    await user.tab(); // blur without a further valid edit
+    expect(input.value).toBe(''); // reflects the actually-stored value (null), not the stale "0"
+    expect(useStore.getState().settings.gardeningLevel).toBeNull();
+  });
 });
