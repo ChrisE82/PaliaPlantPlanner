@@ -6,7 +6,7 @@
 import { CROPS } from '../../data/crops';
 import type { Crop, CropId } from '../../engine/types';
 import { visibleCrops } from '../setup/cropVisibility';
-import { readableTextColor } from '../format';
+import CropSwatch from '../CropSwatch';
 
 export interface CropPaletteProps {
   gardeningLevel: number | null;
@@ -19,9 +19,7 @@ export interface CropPaletteProps {
 function CropChip({ crop, selected, onClick }: { crop: Crop; selected: boolean; onClick: () => void }) {
   return (
     <button type="button" className="helper-chip" aria-pressed={selected} onClick={onClick}>
-      <span className="helper-chip__swatch" style={{ background: crop.color, color: readableTextColor(crop.color) }}>
-        {crop.abbr}
-      </span>
+      <CropSwatch crop={crop} />
       <span className="helper-chip__text">
         <span>{crop.name}</span>
       </span>

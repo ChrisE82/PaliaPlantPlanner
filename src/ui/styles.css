@@ -500,7 +500,7 @@ label {
   opacity: 0.65;
 }
 
-.helper-chip__swatch {
+.crop-swatch {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -510,6 +510,18 @@ label {
   font-size: 0.75em;
   font-weight: 700;
   flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.crop-swatch--small {
+  width: 1.5em;
+  height: 1.5em;
+}
+
+.crop-swatch__icon {
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
 }
 
 .helper-chip__text {
@@ -742,6 +754,16 @@ svg :focus-visible {
 .garden-grid__name {
   font-size: 0.15px;
   pointer-events: none;
+}
+
+.garden-grid__icon {
+  pointer-events: none;
+}
+
+.shopping-list__crop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
 }
 
 .garden-grid__dot {

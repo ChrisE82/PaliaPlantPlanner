@@ -17,6 +17,7 @@ import {
   type PlacementBuffs,
   type TilePos,
 } from '../../engine/types';
+import { cropIcon } from '../cropIcons';
 import { readableTextColor } from '../format';
 import { requestedBuffsForCrop } from './buffRequests';
 import { previewPlacement } from './edit';
@@ -212,6 +213,8 @@ export default function GardenGrid({
           const locked = footprintTiles(p.x, p.y, crop.size).some((t) => lockedSet.has(tileKey(t.x, t.y)));
           const label = placementAriaLabel(crop, p.x, p.y, received, missing);
           const showName = nameFits(crop);
+          const icon = cropIcon(crop.id);
+          const iconSize = crop.size === 1 ? 0.7 : crop.size * 0.55;
           const cx = p.x + crop.size / 2;
           const cy = p.y + crop.size / 2;
           const textColor = readableTextColor(crop.color);
@@ -242,21 +245,33 @@ export default function GardenGrid({
                 rx={0.15}
                 style={{ fill: crop.color }}
               />
-              <text
-                className="garden-grid__abbr"
-                x={cx}
-                y={showName ? cy - 0.16 : cy}
-                textAnchor="middle"
-                dominantBaseline="central"
-                style={{ fill: textColor }}
-              >
-                {crop.abbr}
-              </text>
+              {icon ? (
+                <image
+                  className="garden-grid__icon"
+                  href={icon}
+                  x={cx - iconSize / 2}
+                  y={p.y + (crop.size - iconSize) / 2 - (showName ? 0.18 : 0.06)}
+                  width={iconSize}
+                  height={iconSize}
+                  preserveAspectRatio="xMidYMid meet"
+                />
+              ) : (
+                <text
+                  className="garden-grid__abbr"
+                  x={cx}
+                  y={showName ? cy - 0.16 : cy}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  style={{ fill: textColor }}
+                >
+                  {crop.abbr}
+                </text>
+              )}
               {showName && (
                 <text
                   className="garden-grid__name"
                   x={cx}
-                  y={cy + 0.22}
+                  y={icon ? p.y + crop.size - 0.42 : cy + 0.22}
                   textAnchor="middle"
                   dominantBaseline="central"
                   style={{ fill: textColor }}

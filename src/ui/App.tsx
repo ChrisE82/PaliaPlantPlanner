@@ -25,6 +25,10 @@ export default function App() {
 
       <footer className="sources" id="sources" tabIndex={-1}>
         <h2>Crop data sources</h2>
+        <p className="muted">
+          Unofficial fan tool. Not affiliated with, endorsed by or sponsored by Singularity 6 or Daybreak Game Company.
+          Palia, its crop names and the crop icons shown here are their property.
+        </p>
         <p className="muted">{CROP_DATA.note}</p>
         <ul>
           {CROP_DATA.sources.map((source) => (

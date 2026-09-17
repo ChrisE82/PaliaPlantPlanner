@@ -1,0 +1,111 @@
+{
+  "fetchedOn": "2026-09-17",
+  "source": "https://palia.wiki.gg",
+  "files": [
+    {
+      "id": "tomato",
+      "file": "Tomato.png",
+      "page": "https://palia.wiki.gg/wiki/File:Tomato.png",
+      "width": 128,
+      "bytes": 7240
+    },
+    {
+      "id": "potato",
+      "file": "Potato.png",
+      "page": "https://palia.wiki.gg/wiki/File:Potato.png",
+      "width": 128,
+      "bytes": 12723
+    },
+    {
+      "id": "napa-cabbage",
+      "file": "Napa Cabbage.png",
+      "page": "https://palia.wiki.gg/wiki/File:Napa_Cabbage.png",
+      "width": 108,
+      "bytes": 8001
+    },
+    {
+      "id": "rice",
+      "file": "Rice.png",
+      "page": "https://palia.wiki.gg/wiki/File:Rice.png",
+      "width": 128,
+      "bytes": 19989
+    },
+    {
+      "id": "wheat",
+      "file": "Wheat.png",
+      "page": "https://palia.wiki.gg/wiki/File:Wheat.png",
+      "width": 128,
+      "bytes": 7291
+    },
+    {
+      "id": "corn",
+      "file": "Corn.png",
+      "page": "https://palia.wiki.gg/wiki/File:Corn.png",
+      "width": 128,
+      "bytes": 13137
+    },
+    {
+      "id": "carrot",
+      "file": "Carrot.png",
+      "page": "https://palia.wiki.gg/wiki/File:Carrot.png",
+      "width": 128,
+      "bytes": 9727
+    },
+    {
+      "id": "onion",
+      "file": "Onion.png",
+      "page": "https://palia.wiki.gg/wiki/File:Onion.png",
+      "width": 128,
+      "bytes": 15429
+    },
+    {
+      "id": "bok-choy",
+      "file": "Bok Choy.png",
+      "page": "https://palia.wiki.gg/wiki/File:Bok_Choy.png",
+      "width": 128,
+      "bytes": 7404
+    },
+    {
+      "id": "cotton",
+      "file": "Cotton.png",
+      "page": "https://palia.wiki.gg/wiki/File:Cotton.png",
+      "width": 128,
+      "bytes": 5215
+    },
+    {
+      "id": "blueberry",
+      "file": "Blueberries.png",
+      "page": "https://palia.wiki.gg/wiki/File:Blueberries.png",
+      "width": 128,
+      "bytes": 6421
+    },
+    {
+      "id": "batterfly-bean",
+      "file": "Batterfly Beans.png",
+      "page": "https://palia.wiki.gg/wiki/File:Batterfly_Beans.png",
+      "width": 128,
+      "bytes": 21697
+    },
+    {
+      "id": "spicy-pepper",
+      "file": "Spicy Pepper.png",
+      "page": "https://palia.wiki.gg/wiki/File:Spicy_Pepper.png",
+      "width": 128,
+      "bytes": 6629
+    },
+    {
+      "id": "rockhopper-pumpkin",
+      "file": "Rockhopper Pumpkin.png",
+      "page": "https://palia.wiki.gg/wiki/File:Rockhopper_Pumpkin.png",
+      "width": 128,
+      "bytes": 19089
+    },
+    {
+      "id": "apple",
+      "file": "Apple.png",
+      "page": "https://palia.wiki.gg/wiki/File:Apple.png",
+      "width": 128,
+      "bytes": 10816
+    }
+  ]
+}

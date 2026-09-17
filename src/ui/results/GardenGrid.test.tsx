@@ -28,6 +28,32 @@ function buildFixture(goals: Goal[], goalCrops: Set<string>) {
   return { garden, buffs, goals, goalCrops };
 }
 
+describe('GardenGrid crop icons', () => {
+  it('draws one icon per plant when icons are available', () => {
+    const { garden, buffs } = buildFixture([], new Set());
+    const { container } = render(
+      <GardenGrid
+        garden={garden}
+        placements={PLACEMENTS}
+        cropsById={CROP_BY_ID}
+        buffs={buffs}
+        goals={[]}
+        goalCrops={new Set()}
+        lockedTiles={[]}
+      />,
+    );
+
+    const icons = container.querySelectorAll('image.garden-grid__icon');
+    // With no icon files, the grid shows short labels instead.
+    if (icons.length === 0) {
+      expect(screen.getAllByText('Ap').length).toBe(1);
+      return;
+    }
+    expect(icons.length).toBe(PLACEMENTS.length);
+    expect(icons[0].getAttribute('href')).toContain('apple');
+  });
+});
+
 describe('GardenGrid aria labels', () => {
   it('describes crop, size, position, and received buffs it has and requested buffs it is missing', () => {
     const goals: Goal[] = [{ id: 'g1', crop: 'apple', measure: 'waterRetain', amount: { kind: 'all' }, importance: 'high' }];

@@ -2,7 +2,9 @@
  * Seed shopping list: crop, seeds, price each, total, where to get them
  * (project task spec, Task A step 5).
  */
+import { CROP_BY_ID } from '../../data/crops';
 import type { ShoppingList as ShoppingListData } from '../../engine/types';
+import CropSwatch from '../CropSwatch';
 import { formatInt } from '../format';
 
 function priceText(unitPrice: number | null, currency: 'gold' | 'medals' | null): string {
@@ -37,7 +39,12 @@ export default function ShoppingList({ list }: ShoppingListProps) {
           <tbody>
             {list.lines.map((line) => (
               <tr key={line.cropId}>
-                <td>{line.name}</td>
+                <td>
+                  <span className="shopping-list__crop">
+                    {CROP_BY_ID.has(line.cropId) && <CropSwatch crop={CROP_BY_ID.get(line.cropId)!} size="small" />}
+                    {line.name}
+                  </span>
+                </td>
                 <td>{line.count}</td>
                 <td>{priceText(line.unitPrice, line.currency)}</td>
                 <td>{totalText(line.total, line.currency)}</td>

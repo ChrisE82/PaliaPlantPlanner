@@ -1,7 +1,7 @@
 import { CROPS } from '../../data/crops';
 import { goalCropIds } from '../../engine/goals';
 import { BUFF_NAMES } from '../../engine/types';
-import { readableTextColor } from '../format';
+import CropSwatch from '../CropSwatch';
 import { useStore } from '../state/store';
 import { visibleCrops } from './cropVisibility';
 
@@ -45,12 +45,7 @@ export default function HelperPicker() {
               disabled={usedInGoal}
               onClick={() => toggleHelper(crop.id)}
             >
-              <span
-                className="helper-chip__swatch"
-                style={{ background: crop.color, color: readableTextColor(crop.color) }}
-              >
-                {crop.abbr}
-              </span>
+              <CropSwatch crop={crop} />
               <span className="helper-chip__text">
                 <span>{crop.name}</span>
                 {crop.buff && <span className="helper-chip__buff">{BUFF_NAMES[crop.buff]}</span>}

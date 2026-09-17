@@ -82,6 +82,12 @@ research/      brute-force check of the arrangement examples in PLAN.md
 
 Every push to `main` runs the tests, builds the site, and publishes it to GitHub Pages ([workflow](.github/workflows/deploy.yml)).
 
+## Art and trademarks
+
+The crop icons in [`src/assets/crops/`](src/assets/crops/) are game art from Palia. They belong to Singularity 6 / Daybreak Game Company and are used here for reference in a free fan tool. They are not covered by any license this project grants for its own code, and nothing here claims ownership of them. [`src/assets/crops/sources.json`](src/assets/crops/sources.json) records where each file came from.
+
+This tool is unofficial and is not affiliated with, endorsed by or sponsored by Singularity 6 or Daybreak Game Company. If the rights holder asks for the art to be removed, delete `src/assets/crops/`: every crop then falls back to a colored tile with its short label, and nothing else changes.
+
 ## Credits
 
 Game rules and crop data were checked against the [Palia wiki](https://palia.wiki.gg/), [aisen's Palia Garden Planner](https://github.com/VincentAmante/palia-tools), and [garden-plot-optimizer](https://github.com/bumblebeers/garden-plot-optimizer). No code or art was copied from them.
