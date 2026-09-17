@@ -24,7 +24,7 @@ Each importance level has two scores: one for its targets (quantity numbers and 
 
 Maximize goals with the same importance share space evenly. If everything else is tied, the planner prefers more filled tiles, then a more compact plot arrangement, then more buffs on goal crops, then goal crops over helpers.
 
-The search runs in your browser in Web Workers. It uses late acceptance hill climbing, which accepts a change when the result is at least as good as the current layout or as the layout from a fixed number of steps earlier.
+The search runs in your browser in Web Workers. For each arrangement it builds starting layouts, improves them with late acceptance hill climbing (which accepts a change when the result is at least as good as the current layout or as the layout from a fixed number of steps earlier), and finishes with a pass that tries every allowed 1x1 crop on every tile. It screens every arrangement quickly, spends more time on the best few dozen, and the most time on the best 3. Search time can be set to Quick, Normal or Thorough.
 
 ## Game rules it uses
 

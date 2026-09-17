@@ -1,6 +1,6 @@
 # Palia Garden Planner: Plan
 
-Status: plan for review, 2026-09-17. Design decisions come from the Q&A. Game rules and crop data were researched and checked against the code of two existing Palia planners (sections 3 and 8). The project owner confirmed the rules in section 3.
+Status: milestones 1 to 6 built, 2026-09-17. Live at https://chrise82.github.io/PaliaPlantPlanner/. Design decisions come from the Q&A. Game rules and crop data were researched and checked against the code of two existing Palia planners (sections 3 and 8). The project owner confirmed the rules in section 3.
 
 ## 1. What the tool does
 
