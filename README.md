@@ -80,7 +80,7 @@ research/      brute-force check of the arrangement examples in PLAN.md
 
 ## Deployment
 
-Every push to `main` runs the tests, builds the site, and publishes it to GitHub Pages ([workflow](.github/workflows/deploy.yml)).
+Every push to `main` runs the tests and builds the site. Publishing to GitHub Pages is manual while the project is still in progress: open the Actions tab, choose "Test and deploy to GitHub Pages", and press "Run workflow" ([workflow](.github/workflows/deploy.yml)). The live site keeps showing the last version that was published this way.
 
 ## Art and trademarks
 

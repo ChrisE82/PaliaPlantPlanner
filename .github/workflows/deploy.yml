@@ -29,8 +29,10 @@ jobs:
         with:
           path: dist
 
+  # Publishing is manual until the project is ready for production: run this
+  # workflow from the Actions tab (Run workflow) to deploy the current main.
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:
