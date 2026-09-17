@@ -238,3 +238,66 @@ export interface PlanResult {
   arrangementsTried: number;
   elapsedMs: number;
 }
+
+/** Runs the planner (in Web Workers in the browser, synchronously in tests). */
+export interface PlannerClient {
+  run(request: PlanRequest, onProgress: (progress: PlanProgress) => void, signal?: AbortSignal): Promise<PlanResult>;
+}
+
+// ---------------------------------------------------------------------------
+// Reports shown in the UI
+// ---------------------------------------------------------------------------
+
+/** A problem found in the settings before planning (engine/precheck.ts). */
+export interface PrecheckIssue {
+  /** The goal the issue belongs to, or null for the whole plan. */
+  goalId: string | null;
+  /** 'error' blocks planning; 'warning' does not. */
+  severity: 'error' | 'warning';
+  message: string;
+}
+
+/** How well a layout meets one goal (engine/explain.ts). */
+export interface GoalReport {
+  goalId: string;
+  /** For example "Apple · Harvest Boost · All plants". */
+  label: string;
+  /** 0 to 1. For Maximize goals: share of garden tiles used by the crop. */
+  score: number;
+  /** 'info' is used for Maximize goals, which have no target to meet. */
+  status: 'met' | 'partial' | 'unmet' | 'info';
+  /** For example "4 of 4 plants", "12 plants", "3 of 4 Apples have Harvest Boost". */
+  value: string;
+  /** Why the goal is not fully met, when known. */
+  reason: string | null;
+}
+
+/** One buff for one placement, for the plant details panel (engine/buffs.ts). */
+export interface BuffDetail {
+  buff: BuffId;
+  /** Touching tiles that give this buff. */
+  contacts: number;
+  /** Contacts needed for this crop's size. */
+  needed: number;
+  received: boolean;
+  /** Crop ids of the neighbors giving this buff, without duplicates. */
+  givers: CropId[];
+}
+
+export interface ShoppingLine {
+  cropId: CropId;
+  name: string;
+  /** Seeds needed = plants in the layout. */
+  count: number;
+  unitPrice: number | null;
+  currency: 'gold' | 'medals' | null;
+  /** count * unitPrice, or null when there is no price. */
+  total: number | null;
+  source: string;
+}
+
+export interface ShoppingList {
+  lines: ShoppingLine[];
+  totalGold: number;
+  totalMedals: number;
+}
