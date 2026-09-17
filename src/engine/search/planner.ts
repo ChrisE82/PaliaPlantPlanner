@@ -10,6 +10,7 @@ import { buildGarden, normalizePlots } from '../garden';
 import { compareScores } from '../score';
 import type {
   CropId,
+  Garden,
   Goal,
   LayoutSolution,
   PlanProgress,
@@ -155,28 +156,49 @@ function differenceFraction(a: LayoutState, b: LayoutState, problem: CompiledPro
   return diff / soil.length;
 }
 
+
 // ---------------------------------------------------------------------------
 // Task running
 // ---------------------------------------------------------------------------
 
-/** Runs a batch of optimize tasks, in task order, reporting each as it completes. */
-export type TaskRunner = (
+/**
+ * Runs a batch of optimize tasks and resolves with results in task order,
+ * reporting each result as it completes. `parallelism` is how many tasks run
+ * at the same time; plan() uses it to size per-task time limits.
+ */
+export type TaskRunner = ((
   tasks: OptimizeTask[],
   onResult: (result: OptimizeResult) => void,
   signal?: AbortSignal,
-) => Promise<OptimizeResult[]>;
+) => Promise<OptimizeResult[]>) & { readonly parallelism?: number };
 
-/** Sequential fallback / test runner: runs every task on the calling thread. */
-export const runTasksSync: TaskRunner = async (tasks, onResult, signal) => {
-  const results: OptimizeResult[] = [];
-  for (const task of tasks) {
+/** How long runTasksSync may block before yielding to the event loop. */
+const SYNC_YIELD_MS = 50;
+
+/**
+ * Sequential fallback and test runner: runs every task on the calling thread.
+ * It yields to the event loop every SYNC_YIELD_MS so progress can render and
+ * an abort can arrive.
+ */
+export const runTasksSync: TaskRunner = Object.assign(
+  async (tasks: OptimizeTask[], onResult: (result: OptimizeResult) => void, signal?: AbortSignal) => {
+    const results: OptimizeResult[] = [];
+    let lastYield = performance.now();
+    for (const task of tasks) {
+      throwIfAborted(signal);
+      const result = optimizeArrangement(task);
+      results.push(result);
+      onResult(result);
+      if (performance.now() - lastYield > SYNC_YIELD_MS) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        lastYield = performance.now();
+      }
+    }
     throwIfAborted(signal);
-    const result = optimizeArrangement(task);
-    results.push(result);
-    onResult(result);
-  }
-  return results;
-};
+    return results;
+  },
+  { parallelism: 1 },
+);
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -193,20 +215,21 @@ function deriveSeed(base: number, salt: number): number {
 // Full plan(): fixed / custom / suggest
 // ---------------------------------------------------------------------------
 
-/** Assumed worker count, used only to size per-task time limits within a stage's budget. */
-const ASSUMED_PARALLELISM = 8;
 const REFINE_CANDIDATES = 24;
 const FINISH_CANDIDATES = 3;
 const MIN_TASK_TIME_MS = 5;
 
-const SINGLE_RESTARTS = 8;
+// Single-arrangement and finishing runs keep restarting until their time limit.
+const SINGLE_RESTARTS = 1000;
 const SINGLE_ITERATIONS = 60000;
 const SCREEN_RESTARTS = 1;
 const SCREEN_ITERATIONS = 4000;
 const REFINE_RESTARTS = 3;
 const REFINE_ITERATIONS = 20000;
-const FINISH_RESTARTS = 8;
+const FINISH_RESTARTS = 1000;
 const FINISH_ITERATIONS = 60000;
+
+type Found = OptimizeResult['solutions'][number];
 
 export async function plan(
   request: PlanRequest,
@@ -217,116 +240,76 @@ export async function plan(
   const start = performance.now();
   throwIfAborted(signal);
   const settings = request.settings;
+  const parallelism = Math.max(1, Math.floor(runTasks.parallelism ?? 1));
 
   if (request.fixed) {
-    return planSingleArrangement(
-      request.fixed.plots,
-      settings.goals,
-      settings.helpers,
-      request.seed,
-      request.timeBudgetMs,
-      { placements: request.fixed.placements, lockedTiles: request.fixed.lockedTiles },
-      'Current arrangement',
-      runTasks,
-      onProgress,
-      signal,
-      start,
-    );
+    const target = {
+      plots: request.fixed.plots,
+      fixed: { placements: request.fixed.placements, lockedTiles: request.fixed.lockedTiles },
+      label: 'Current arrangement',
+    };
+    return planSingleArrangement(target, request, runTasks, parallelism, onProgress, signal, start);
   }
 
   if (settings.arrangement.mode === 'custom') {
-    return planSingleArrangement(
-      settings.arrangement.plots,
-      settings.goals,
-      settings.helpers,
-      request.seed,
-      request.timeBudgetMs,
-      undefined,
-      'Your arrangement',
-      runTasks,
-      onProgress,
-      signal,
-      start,
-    );
+    const target = { plots: settings.arrangement.plots, fixed: undefined, label: 'Your arrangement' };
+    return planSingleArrangement(target, request, runTasks, parallelism, onProgress, signal, start);
   }
 
-  return planSuggest(request, runTasks, onProgress, signal, start);
+  return planSuggest(request, runTasks, parallelism, onProgress, signal, start);
 }
 
+/**
+ * One arrangement: one task per parallel runner, each with its own seed and
+ * the whole time budget. Returns the best layout plus up to 2 distinct
+ * alternatives.
+ */
 async function planSingleArrangement(
-  plots: PlotPos[],
-  goals: Goal[],
-  helpers: CropId[],
-  seed: number,
-  timeBudgetMs: number,
-  fixed: { placements: Placement[]; lockedTiles: TilePos[] } | undefined,
-  label: string,
+  target: { plots: PlotPos[]; fixed: OptimizeTask['fixed']; label: string },
+  request: PlanRequest,
   runTasks: TaskRunner,
+  parallelism: number,
   onProgress: (p: PlanProgress) => void,
   signal: AbortSignal | undefined,
   start: number,
 ): Promise<PlanResult> {
-  const task: OptimizeTask = {
-    taskId: 0,
+  const { plots, fixed, label } = target;
+  const garden = buildGarden(plots);
+  const tasks: OptimizeTask[] = Array.from({ length: parallelism }, (_, i) => ({
+    taskId: i,
     plots,
-    goals,
-    helpers,
-    seed,
+    goals: request.settings.goals,
+    helpers: request.settings.helpers,
+    seed: deriveSeed(request.seed, i),
     restarts: SINGLE_RESTARTS,
     iterationsPerRestart: SINGLE_ITERATIONS,
-    timeLimitMs: Math.max(MIN_TASK_TIME_MS, timeBudgetMs),
+    timeLimitMs: Math.max(MIN_TASK_TIME_MS, request.timeBudgetMs),
     fixed,
     keep: 3,
-  };
+  }));
 
-  let best: LayoutSolution | null = null;
-  const [result] = await runTasks(
-    [task],
-    (r) => {
-      const solutions = toLayoutSolutions(plots, r.solutions, label);
-      best = solutions.length > 0 ? solutions[0] : null;
-      onProgress({ stage: 'finishing', done: 1, total: 1, best });
+  const found: Found[] = [];
+  let done = 0;
+  await runTasks(
+    tasks,
+    (result) => {
+      done++;
+      found.push(...result.solutions);
+      const [best] = distinctBest(found, garden, 1);
+      onProgress({ stage: 'finishing', done, total: tasks.length, best: best ? toSolution(plots, best, label) : null });
     },
     signal,
   );
   throwIfAborted(signal);
 
-  const solutions = toLayoutSolutions(plots, result.solutions, label);
-  return {
-    solutions,
-    arrangementsTried: solutions.length > 0 ? 1 : 0,
-    elapsedMs: performance.now() - start,
-  };
-}
-
-function toLayoutSolutions(
-  plots: readonly PlotPos[],
-  solutions: readonly { placements: Placement[]; score: ScoreVector }[],
-  label: string,
-): LayoutSolution[] {
-  const normalized = normalizePlots(plots);
-  return solutions.map((s) => ({ plots: normalized, placements: s.placements, score: s.score, label }));
-}
-
-interface RankedCandidate {
-  index: number;
-  plots: PlotPos[];
-  result: OptimizeResult;
-}
-
-function rankCandidates(candidates: { index: number; plots: PlotPos[] }[], results: Map<number, OptimizeResult>): RankedCandidate[] {
-  const ranked: RankedCandidate[] = [];
-  for (const c of candidates) {
-    const result = results.get(c.index);
-    if (result && result.solutions.length > 0) ranked.push({ index: c.index, plots: c.plots, result });
-  }
-  ranked.sort((a, b) => -compareScores(a.result.solutions[0].score, b.result.solutions[0].score));
-  return ranked;
+  const solutions = distinctBest(found, garden, 3).map((s) => toSolution(plots, s, label));
+  return { solutions, arrangementsTried: solutions.length > 0 ? 1 : 0, elapsedMs: performance.now() - start };
 }
 
 async function planSuggest(
   request: PlanRequest,
   runTasks: TaskRunner,
+  parallelism: number,
   onProgress: (p: PlanProgress) => void,
   signal: AbortSignal | undefined,
   start: number,
@@ -341,87 +324,79 @@ async function planSuggest(
   }
   const allCandidates = allPlots.map((plots, index) => ({ index, plots }));
 
+  // Every solution found for each arrangement, across all stages. A later
+  // stage can do worse than an earlier one (different seeds), so results are
+  // always taken from the best found anywhere.
+  const foundByCandidate = new Map<number, Found[]>();
+  const bestOf = (index: number): Found | undefined => foundByCandidate.get(index)?.[0];
   let bestOverall: LayoutSolution | null = null;
-  const noteBest = (plots: readonly PlotPos[], result: OptimizeResult, label: string) => {
+
+  const record = (result: OptimizeResult) => {
     if (result.solutions.length === 0) return;
-    const candidate = toLayoutSolutions(plots, [result.solutions[0]], label)[0];
-    if (!bestOverall || compareScores(candidate.score, bestOverall.score) > 0) bestOverall = candidate;
+    const list = foundByCandidate.get(result.taskId) ?? [];
+    list.push(...result.solutions);
+    list.sort((a, b) => -compareScores(a.score, b.score));
+    foundByCandidate.set(result.taskId, list);
+    const top = list[0];
+    if (!bestOverall || compareScores(top.score, bestOverall.score) > 0) {
+      const plots = allPlots[result.taskId];
+      bestOverall = toSolution(plots, top, arrangementLabel(plots));
+    }
+  };
+
+  const ranked = (candidates: readonly { index: number; plots: PlotPos[] }[]) =>
+    candidates
+      .filter((c) => bestOf(c.index) !== undefined)
+      .sort((a, b) => -compareScores(bestOf(a.index)!.score, bestOf(b.index)!.score));
+
+  const runStage = async (
+    stage: PlanProgress['stage'],
+    candidates: readonly { index: number; plots: PlotPos[] }[],
+    budgetMs: number,
+    saltRound: number,
+    restarts: number,
+    iterations: number,
+    keep: number,
+  ) => {
+    // Tasks run `parallelism` at a time, so the stage takes about
+    // taskTime * ceil(candidates / parallelism).
+    const taskTime = Math.max(MIN_TASK_TIME_MS, budgetMs / Math.ceil(Math.max(1, candidates.length) / parallelism));
+    let done = 0;
+    await runTasks(
+      candidates.map((c) => makeTask(c, settings, request.seed, saltRound, restarts, iterations, taskTime, keep)),
+      (result) => {
+        done++;
+        record(result);
+        onProgress({ stage, done, total: candidates.length, best: bestOverall });
+      },
+      signal,
+    );
+    throwIfAborted(signal);
   };
 
   const screeningBudget = request.timeBudgetMs * 0.4;
   const refiningBudget = request.timeBudgetMs * 0.35;
   const finishingBudget = Math.max(0, request.timeBudgetMs - screeningBudget - refiningBudget);
 
-  // ---- Screening: a quick pass over every fitting candidate. ----
-  const screeningTaskTime = Math.max(
-    MIN_TASK_TIME_MS,
-    screeningBudget / Math.ceil(allCandidates.length / ASSUMED_PARALLELISM),
-  );
-  const screeningResults = new Map<number, OptimizeResult>();
-  let screeningDone = 0;
-  await runTasks(
-    allCandidates.map((c) => makeTask(c, settings, request.seed, 1, SCREEN_RESTARTS, SCREEN_ITERATIONS, screeningTaskTime)),
-    (result) => {
-      screeningDone++;
-      screeningResults.set(result.taskId, result);
-      noteBest(allPlots[result.taskId], result, arrangementLabel(allPlots[result.taskId]));
-      onProgress({ stage: 'screening', done: screeningDone, total: allCandidates.length, best: bestOverall });
-    },
-    signal,
-  );
-  throwIfAborted(signal);
+  await runStage('screening', allCandidates, screeningBudget, 1, SCREEN_RESTARTS, SCREEN_ITERATIONS, 1);
+  const refineCandidates = ranked(allCandidates).slice(0, REFINE_CANDIDATES);
+  await runStage('refining', refineCandidates, refiningBudget, 2, REFINE_RESTARTS, REFINE_ITERATIONS, 1);
+  const finishCandidates = ranked(refineCandidates).slice(0, FINISH_CANDIDATES);
+  await runStage('finishing', finishCandidates, finishingBudget, 3, FINISH_RESTARTS, FINISH_ITERATIONS, 3);
 
-  // ---- Refining: more time on the best few dozen. ----
-  const refineCandidates = rankCandidates(allCandidates, screeningResults).slice(0, REFINE_CANDIDATES);
-  const refiningTaskTime = Math.max(
-    MIN_TASK_TIME_MS,
-    refiningBudget / Math.ceil(Math.max(1, refineCandidates.length) / ASSUMED_PARALLELISM),
-  );
-  const refiningResults = new Map<number, OptimizeResult>();
-  let refiningDone = 0;
-  await runTasks(
-    refineCandidates.map((c) =>
-      makeTask(c, settings, request.seed, 2, REFINE_RESTARTS, REFINE_ITERATIONS, refiningTaskTime),
-    ),
-    (result) => {
-      refiningDone++;
-      refiningResults.set(result.taskId, result);
-      noteBest(allPlots[result.taskId], result, arrangementLabel(allPlots[result.taskId]));
-      onProgress({ stage: 'refining', done: refiningDone, total: refineCandidates.length, best: bestOverall });
-    },
-    signal,
-  );
-  throwIfAborted(signal);
+  const finalRanked = ranked(finishCandidates);
+  const solutions: LayoutSolution[] = finalRanked.map((c) => toSolution(c.plots, bestOf(c.index)!, arrangementLabel(c.plots)));
 
-  // ---- Finishing: most remaining time on the best 3. ----
-  const finishCandidates = rankCandidates(refineCandidates, refiningResults).slice(0, FINISH_CANDIDATES);
-  const finishingTaskTime = Math.max(
-    MIN_TASK_TIME_MS,
-    finishingBudget / Math.ceil(Math.max(1, finishCandidates.length) / ASSUMED_PARALLELISM),
-  );
-  const finishingResults = new Map<number, OptimizeResult>();
-  let finishingDone = 0;
-  await runTasks(
-    finishCandidates.map((c) =>
-      makeTask(c, settings, request.seed, 3, FINISH_RESTARTS, FINISH_ITERATIONS, finishingTaskTime),
-    ),
-    (result) => {
-      finishingDone++;
-      finishingResults.set(result.taskId, result);
-      noteBest(allPlots[result.taskId], result, arrangementLabel(allPlots[result.taskId]));
-      onProgress({ stage: 'finishing', done: finishingDone, total: finishCandidates.length, best: bestOverall });
-    },
-    signal,
-  );
-  throwIfAborted(signal);
-
-  const finalRanked = rankCandidates(finishCandidates, finishingResults);
-  const solutions: LayoutSolution[] = finalRanked.map((c) => ({
-    plots: normalizePlots(c.plots),
-    placements: c.result.solutions[0].placements,
-    score: c.result.solutions[0].score,
-    label: arrangementLabel(c.plots),
-  }));
+  // With fewer than 3 arrangements to show (1 to 3 plots, or a tight space
+  // limit), fill the list with distinct layouts on the best arrangement.
+  if (solutions.length > 0 && solutions.length < FINISH_CANDIDATES) {
+    const best = finalRanked[0];
+    const alternatives = distinctBest(foundByCandidate.get(best.index) ?? [], buildGarden(best.plots), FINISH_CANDIDATES).slice(1);
+    for (const alternative of alternatives) {
+      if (solutions.length >= FINISH_CANDIDATES) break;
+      solutions.push(toSolution(best.plots, alternative, arrangementLabel(best.plots)));
+    }
+  }
 
   return {
     solutions,
@@ -438,6 +413,7 @@ function makeTask(
   restarts: number,
   iterationsPerRestart: number,
   timeLimitMs: number,
+  keep: number,
 ): OptimizeTask {
   return {
     taskId: candidate.index,
@@ -448,6 +424,43 @@ function makeTask(
     restarts,
     iterationsPerRestart,
     timeLimitMs,
-    keep: 1,
+    keep,
   };
+}
+
+function toSolution(plots: readonly PlotPos[], found: Found, label: string): LayoutSolution {
+  return { plots: normalizePlots(plots), placements: found.placements, score: found.score, label };
+}
+
+/** Crop id on every tile of the garden's bounding box, or null for empty and non-soil tiles. */
+function tileCrops(garden: Garden, placements: readonly Placement[]): (CropId | null)[] {
+  const tiles = new Array<CropId | null>(garden.width * garden.height).fill(null);
+  for (const p of placements) {
+    const size = CROP_BY_ID.get(p.cropId)?.size ?? 1;
+    for (let dy = 0; dy < size; dy++) {
+      for (let dx = 0; dx < size; dx++) tiles[(p.y + dy) * garden.width + p.x + dx] = p.cropId;
+    }
+  }
+  return tiles;
+}
+
+/**
+ * The best solutions, best first, skipping any that differ from an already
+ * chosen one on fewer than DISTINCT_FRACTION of the garden's tiles.
+ */
+function distinctBest(found: readonly Found[], garden: Garden, keep: number): Found[] {
+  const sorted = [...found].sort((a, b) => -compareScores(a.score, b.score));
+  const chosen: { found: Found; tiles: (CropId | null)[] }[] = [];
+  const minDifferent = DISTINCT_FRACTION * garden.tileCount;
+  for (const candidate of sorted) {
+    if (chosen.length >= keep) break;
+    const tiles = tileCrops(garden, candidate.placements);
+    const distinct = chosen.every((c) => {
+      let different = 0;
+      for (let i = 0; i < tiles.length; i++) if (tiles[i] !== c.tiles[i]) different++;
+      return different >= minDifferent;
+    });
+    if (distinct) chosen.push({ found: candidate, tiles });
+  }
+  return chosen.map((c) => c.found);
 }

@@ -83,14 +83,23 @@ class PlannerWorkerPool {
     return new Promise((resolve) => this.waiters.push(resolve));
   }
 
-  runTask(task: OptimizeTask): Promise<OptimizeResult> {
-    return this.acquire().then(
-      (mw) =>
-        new Promise<OptimizeResult>((resolve, reject) => {
-          mw.current = { resolve, reject };
-          mw.worker.postMessage(task);
-        }),
-    );
+  get size(): number {
+    return this.managed.length;
+  }
+
+  runTask(task: OptimizeTask, signal?: AbortSignal): Promise<OptimizeResult> {
+    return this.acquire().then((mw) => {
+      // A task still queued when its run was aborted must not start: hand the
+      // worker straight to the next waiter instead.
+      if (signal?.aborted) {
+        this.handBack(mw);
+        return Promise.reject(abortError());
+      }
+      return new Promise<OptimizeResult>((resolve, reject) => {
+        mw.current = { resolve, reject };
+        mw.worker.postMessage(task);
+      });
+    });
   }
 
   /** Terminates every worker immediately and respawns fresh ones; rejects any in-flight tasks. */
@@ -116,7 +125,7 @@ class PlannerWorkerPool {
 }
 
 function makeTaskRunner(pool: PlannerWorkerPool): TaskRunner {
-  return (tasks, onResult, signal) =>
+  const run = (tasks: OptimizeTask[], onResult: (result: OptimizeResult) => void, signal?: AbortSignal) =>
     new Promise<OptimizeResult[]>((resolve, reject) => {
       if (tasks.length === 0) {
         resolve([]);
@@ -141,7 +150,7 @@ function makeTaskRunner(pool: PlannerWorkerPool): TaskRunner {
       if (signal) signal.addEventListener('abort', onAbort);
 
       tasks.forEach((task, i) => {
-        pool.runTask(task).then(
+        pool.runTask(task, signal).then(
           (result) => {
             if (settled) return;
             results[i] = result;
@@ -162,6 +171,7 @@ function makeTaskRunner(pool: PlannerWorkerPool): TaskRunner {
         );
       });
     });
+  return Object.assign(run, { parallelism: pool.size });
 }
 
 function defaultPoolSize(): number {

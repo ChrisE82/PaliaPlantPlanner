@@ -3,8 +3,8 @@ import { CROP_BY_ID } from '../../data/crops';
 import { buildGarden } from '../garden';
 import { validatePlacements } from '../layout';
 import { compareScores } from '../score';
-import type { Goal, PlanProgress, PlanRequest, PlotPos } from '../types';
-import { plan, runTasksSync } from './planner';
+import type { Goal, PlanProgress, PlanRequest, PlotPos, ScoreVector } from '../types';
+import { plan, runTasksSync, type TaskRunner } from './planner';
 
 function twoPlots(): PlotPos[] {
   return [
@@ -108,6 +108,76 @@ describe('planner.plan with runTasksSync', () => {
       expect(validatePlacements(garden, sol.placements, CROP_BY_ID)).toEqual([]);
     }
   }, 15000);
+
+  it('never returns a best layout worse than one reported during progress', async () => {
+    const goals: Goal[] = [
+      { id: 'g1', crop: 'apple', measure: 'quantity', amount: { kind: 'count', n: 2 }, importance: 'must' },
+      { id: 'g2', crop: 'apple', measure: 'harvestBoost', amount: { kind: 'all' }, importance: 'high' },
+      { id: 'g3', crop: 'tomato', measure: 'quantity', amount: { kind: 'max' }, importance: 'medium' },
+      { id: 'g4', crop: '*', measure: 'waterRetain', amount: { kind: 'all' }, importance: 'low' },
+    ];
+    const request: PlanRequest = {
+      settings: {
+        plotCount: 5,
+        arrangement: { mode: 'suggest', maxWidth: null, maxHeight: null },
+        gardeningLevel: null,
+        goals,
+        helpers: ['wheat', 'potato'],
+      },
+      seed: 11,
+      timeBudgetMs: 1500,
+    };
+    const threeAtATime: TaskRunner = Object.assign(
+      (tasks: Parameters<TaskRunner>[0], onResult: Parameters<TaskRunner>[1], signal?: AbortSignal) =>
+        runTasksSync(tasks, onResult, signal),
+      { parallelism: 3 },
+    );
+    let bestSeen: ScoreVector | null = null;
+    const result = await plan(request, threeAtATime, (p) => {
+      if (p.best && (!bestSeen || compareScores(p.best.score, bestSeen) > 0)) bestSeen = p.best.score;
+    });
+    expect(bestSeen).not.toBeNull();
+    expect(compareScores(result.solutions[0].score, bestSeen!)).toBeGreaterThanOrEqual(0);
+  }, 30000);
+
+  it('uses one task per parallel runner for a custom arrangement and returns distinct alternatives', async () => {
+    const goals: Goal[] = [
+      { id: 'g1', crop: 'tomato', measure: 'quantity', amount: { kind: 'max' }, importance: 'high' },
+      { id: 'g2', crop: 'tomato', measure: 'waterRetain', amount: { kind: 'all' }, importance: 'high' },
+    ];
+    const plots = twoPlots();
+    const request: PlanRequest = {
+      settings: { plotCount: 2, arrangement: { mode: 'custom', plots }, gardeningLevel: null, goals, helpers: ['potato', 'carrot'] },
+      seed: 5,
+      timeBudgetMs: 300,
+    };
+    let taskCount = 0;
+    const fourAtATime: TaskRunner = Object.assign(
+      (tasks: Parameters<TaskRunner>[0], onResult: Parameters<TaskRunner>[1], signal?: AbortSignal) => {
+        taskCount = tasks.length;
+        return runTasksSync(tasks, onResult, signal);
+      },
+      { parallelism: 4 },
+    );
+    const result = await plan(request, fourAtATime, () => {});
+    expect(taskCount).toBe(4);
+    expect(result.solutions.length).toBeGreaterThan(0);
+    const garden = buildGarden(plots);
+    const tileMaps = result.solutions.map((s) => {
+      const tiles = new Array<string | null>(garden.width * garden.height).fill(null);
+      for (const p of s.placements) {
+        const size = CROP_BY_ID.get(p.cropId)!.size;
+        for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) tiles[(p.y + dy) * garden.width + p.x + dx] = p.cropId;
+      }
+      return tiles;
+    });
+    for (let i = 0; i < tileMaps.length; i++) {
+      for (let j = i + 1; j < tileMaps.length; j++) {
+        const different = tileMaps[i].filter((crop, t) => crop !== tileMaps[j][t]).length;
+        expect(different).toBeGreaterThanOrEqual(0.15 * garden.tileCount);
+      }
+    }
+  }, 30000);
 
   it('rejects with an AbortError DOMException when the signal is already aborted', async () => {
     const goals: Goal[] = [{ id: 'g1', crop: 'wheat', measure: 'quantity', amount: { kind: 'max' }, importance: 'high' }];

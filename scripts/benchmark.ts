@@ -11,7 +11,14 @@
  */
 import { CROPS } from '../src/data/crops';
 import type { Goal, Placement, PlanRequest, PlotPos, ScoreVector } from '../src/engine/types';
-import { optimizeArrangement, plan, runTasksSync, type OptimizeTask } from '../src/engine/search/planner';
+import {
+  optimizeArrangement,
+  plan,
+  runTasksSync,
+  type OptimizeResult,
+  type OptimizeTask,
+  type TaskRunner,
+} from '../src/engine/search/planner';
 
 function block3x3(): PlotPos[] {
   const plots: PlotPos[] = [];
@@ -119,9 +126,16 @@ async function benchmarkB(): Promise<void> {
   let firstResultMs: number | null = null;
   let screeningDoneMs: number | null = null;
   const start = performance.now();
+  // Runs tasks one at a time but tells plan() to size them for 8 parallel
+  // workers, so the total time divided by 8 estimates the browser wall time.
+  const simulated8Workers: TaskRunner = Object.assign(
+    (tasks: OptimizeTask[], onResult: (r: OptimizeResult) => void, signal?: AbortSignal) =>
+      runTasksSync(tasks, onResult, signal),
+    { parallelism: 8 },
+  );
   const result = await plan(
     request,
-    runTasksSync,
+    simulated8Workers,
     (p) => {
       if (firstResultMs === null && p.best) firstResultMs = performance.now() - start;
       if (screeningDoneMs === null && p.stage !== 'screening') screeningDoneMs = performance.now() - start;

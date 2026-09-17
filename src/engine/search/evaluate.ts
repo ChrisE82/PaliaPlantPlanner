@@ -99,7 +99,7 @@ export class Evaluator {
           score = problem.tileCount === 0 ? 0 : (plants * size * size) / problem.tileCount;
         } else {
           const n = problem.goalAmountN[g];
-          score = n > 0 ? Math.min(plants, n) / n : 0;
+          score = n > 0 ? Math.min(plants, n) / n : 1; // matches score.ts: "at least 0" is met
         }
       } else {
         const buffIdx = problem.goalBuffIndex[g];
@@ -121,7 +121,7 @@ export class Evaluator {
           score = p === 0 ? 0 : b / p;
         } else {
           const n = problem.goalAmountN[g];
-          score = n > 0 ? Math.min(b, n) / n : 0;
+          score = n > 0 ? Math.min(b, n) / n : 1;
         }
       }
 
