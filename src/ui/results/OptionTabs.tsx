@@ -1,7 +1,7 @@
 /**
  * Tabs for switching between solutions: "Best" / "Option 2" / "Option 3",
- * each with the arrangement label and a small plot-shape thumbnail (project
- * task spec, Task A step 5).
+ * each with the arrangement label and a small plot-shape thumbnail, styled
+ * as a row of pills (project task spec, Task A step 5).
  */
 import { RULES } from '../../engine/rules';
 import type { LayoutSolution, PlotPos } from '../../engine/types';
@@ -34,7 +34,10 @@ export default function OptionTabs({ solutions, editedFlags, selectedIndex, onSe
           >
             <PlotShapeThumbnail plots={s.plots} />
             <span className="option-tabs__text">
-              <span className="option-tabs__name">{editedFlags[i] ? `${name} (edited)` : name}</span>
+              <span className="option-tabs__name">
+                {name}
+                {editedFlags[i] && <span className="badge option-tabs__edited">Edited</span>}
+              </span>
               <span className="option-tabs__arrangement muted">{s.label}</span>
             </span>
           </button>

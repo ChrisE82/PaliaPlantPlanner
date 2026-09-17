@@ -45,19 +45,23 @@ export default function ShoppingList({ list }: ShoppingListProps) {
                     {line.name}
                   </span>
                 </td>
-                <td>{line.count}</td>
-                <td>{priceText(line.unitPrice, line.currency)}</td>
-                <td>{totalText(line.total, line.currency)}</td>
+                <td className="num">{line.count}</td>
+                <td className="num">{priceText(line.unitPrice, line.currency)}</td>
+                <td className="num">{totalText(line.total, line.currency)}</td>
                 <td>{line.source}</td>
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="shopping-list__totals">
+              <td colSpan={5}>
+                {`Total: ${formatInt(list.totalGold)} gold`}
+                {list.totalMedals > 0 ? ` and ${formatInt(list.totalMedals)} Gardening Medals` : ''}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
-      <p className="shopping-list__total">
-        {`Total: ${formatInt(list.totalGold)} gold`}
-        {list.totalMedals > 0 ? ` and ${formatInt(list.totalMedals)} Gardening Medals` : ''}
-      </p>
     </div>
   );
 }

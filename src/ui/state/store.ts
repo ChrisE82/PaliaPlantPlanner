@@ -200,6 +200,37 @@ function applyGoalPatch(goal: Goal, patch: Partial<Goal>): Goal {
   return next;
 }
 
+/**
+ * Moves the goal `id` into `importance`'s lane at position `index` (0-based,
+ * counting only that lane's other goals). `settings.goals` stays a single
+ * array whose order is the display order: a lane is simply the goals with
+ * that importance, in array order (see the Goals board in GoalBoard.tsx).
+ * Used for both drag-and-drop reordering and the keyboard/pointer paths
+ * dnd-kit drives through the same events.
+ */
+function reorderGoals(goals: readonly Goal[], id: string, importance: Importance, index: number): Goal[] {
+  const current = goals.find((g) => g.id === id);
+  if (!current) return goals.slice();
+
+  const moved: Goal = current.importance === importance ? current : { ...current, importance };
+  const without = goals.filter((g) => g.id !== id);
+
+  // Positions, within `without`, of the goals already in the target lane.
+  const laneIndices: number[] = [];
+  without.forEach((g, i) => {
+    if (g.importance === importance) laneIndices.push(i);
+  });
+
+  const clampedIndex = Math.max(0, Math.min(index, laneIndices.length));
+  // Inserting before the goal currently at that lane slot reproduces the
+  // requested position; past the last lane slot, append to the whole array.
+  const insertAt = clampedIndex < laneIndices.length ? laneIndices[clampedIndex] : without.length;
+
+  const next = without.slice();
+  next.splice(insertAt, 0, moved);
+  return next;
+}
+
 // ---------------------------------------------------------------------------
 // Run state: a plan in progress or its result, and per-solution edits
 // ---------------------------------------------------------------------------
@@ -263,6 +294,8 @@ export interface PlannerStore {
   addGoal: () => void;
   updateGoal: (id: string, patch: Partial<Goal>) => void;
   removeGoal: (id: string) => void;
+  /** Moves a goal to `importance`'s lane at display position `index` (see reorderGoals). */
+  reorderGoal: (id: string, importance: Importance, index: number) => void;
   toggleHelper: (cropId: CropId) => void;
   setHelpers: (ids: CropId[]) => void;
   resetToExample: () => void;
@@ -401,6 +434,11 @@ export const useStore = create<PlannerStore>()((set, get) => {
     removeGoal: (id) =>
       set((state) => ({
         settings: { ...state.settings, goals: state.settings.goals.filter((g) => g.id !== id) },
+      })),
+
+    reorderGoal: (id, importance, index) =>
+      set((state) => ({
+        settings: { ...state.settings, goals: reorderGoals(state.settings.goals, id, importance, index) },
       })),
 
     toggleHelper: (cropId) =>

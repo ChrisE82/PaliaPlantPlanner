@@ -127,7 +127,7 @@ describe('re-optimize', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Edit layout' }));
-    await user.click(screen.getByRole('button', { name: 'Lock plant' }));
+    await user.click(screen.getByRole('radio', { name: 'Lock plant' }));
     await user.click(screen.getByTestId('grid-tile-1-1')); // a tile inside the apple
 
     await user.click(screen.getByRole('button', { name: 'Re-optimize unlocked' }));
@@ -190,10 +190,10 @@ describe('editing', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Edit layout' }));
-    await user.click(screen.getByRole('button', { name: 'Lock plant' }));
+    await user.click(screen.getByRole('radio', { name: 'Lock plant' }));
     await user.click(screen.getByTestId('grid-tile-1-1')); // locks the whole apple
 
-    await user.click(screen.getByRole('button', { name: 'Plant' }));
+    await user.click(screen.getByRole('radio', { name: 'Plant' }));
     const palette = screen.getByRole('group', { name: 'Your crops' });
     await user.click(within(palette).getByRole('button', { name: /Wheat/ }));
     await user.click(screen.getByTestId('grid-tile-1-1'));
@@ -208,7 +208,7 @@ describe('editing', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Edit layout' }));
-    await user.click(screen.getByRole('button', { name: 'Erase' }));
+    await user.click(screen.getByRole('radio', { name: 'Erase' }));
     await user.click(screen.getByTestId('grid-tile-3-0'));
 
     expect(useStore.getState().solutionStates[0].placements).toEqual([]);
@@ -220,7 +220,7 @@ describe('editing', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Edit layout' }));
-    await user.click(screen.getByRole('button', { name: 'Lock plant' }));
+    await user.click(screen.getByRole('radio', { name: 'Lock plant' }));
     await user.click(screen.getByTestId('grid-tile-3-0'));
     expect(useStore.getState().solutionStates[0].lockedTiles).toEqual([{ x: 3, y: 0 }]);
 
@@ -234,7 +234,7 @@ describe('editing', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Edit layout' }));
-    await user.click(screen.getByRole('button', { name: 'Lock plot' }));
+    await user.click(screen.getByRole('radio', { name: 'Lock plot' }));
     await user.click(screen.getByTestId('grid-tile-4-1'));
 
     expect(useStore.getState().solutionStates[0].lockedTiles.length).toBe(9);

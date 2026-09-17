@@ -221,3 +221,60 @@ export function toggleLockPlotAt(garden: Garden, lockedTiles: readonly TilePos[]
   const targetTiles = footprintTiles(plot, RULES.plotSize);
   return toggleTileGroup(lockedTiles, targetTiles);
 }
+
+// ---------------------------------------------------------------------------
+// Drag-to-move preview (project task spec, results redesign: dragging a
+// placed plant to another tile). Composes the helpers above; the placement
+// rules themselves are unchanged.
+// ---------------------------------------------------------------------------
+
+export interface MovePreview {
+  /** Where the moved crop would land: the resolved top-left, or the source's own position when nothing fits. */
+  topLeft: TilePos;
+  valid: boolean;
+  /** Why the move is refused, when invalid. */
+  message: string | null;
+}
+
+/**
+ * Preview (and validity check) for dragging an already-placed crop to a new
+ * tile: refuses when the plant itself is locked, when its new footprint
+ * doesn't fit on soil anywhere reachable, or when the new footprint covers a
+ * locked tile — the same rules previewPlacement and placeCropAt use for a
+ * freshly-placed crop.
+ */
+export function previewMove(
+  garden: Garden,
+  cropsById: ReadonlyMap<CropId, Crop>,
+  placements: readonly Placement[],
+  lockedTiles: readonly TilePos[],
+  source: Placement,
+  tapX: number,
+  tapY: number,
+): MovePreview {
+  const crop = cropsById.get(source.cropId);
+  if (!crop) return { topLeft: { x: source.x, y: source.y }, valid: false, message: 'Unknown crop.' };
+
+  const locked = tileSet(lockedTiles);
+  const sourceTiles = footprintTiles(source, crop.size);
+  if (sourceTiles.some((t) => locked.has(tileKey(t.x, t.y)))) {
+    return { topLeft: { x: source.x, y: source.y }, valid: false, message: `${crop.name} is locked. Unlock it first.` };
+  }
+
+  const resolved = resolveTopLeft(garden, crop.size, tapX, tapY);
+  if (!resolved) {
+    return { topLeft: { x: tapX, y: tapY }, valid: false, message: `${crop.name} doesn’t fit there.` };
+  }
+
+  const targetTiles = footprintTiles(resolved, crop.size);
+  const blockedTile = targetTiles.find((t) => locked.has(tileKey(t.x, t.y)));
+  if (blockedTile) {
+    const blocker = placementCovering(placements, cropsById, blockedTile.x, blockedTile.y);
+    const message = blocker
+      ? `${cropsById.get(blocker.cropId)?.name ?? blocker.cropId} is locked. Unlock it first.`
+      : 'That tile is locked. Unlock it first.';
+    return { topLeft: resolved, valid: false, message };
+  }
+
+  return { topLeft: resolved, valid: true, message: null };
+}

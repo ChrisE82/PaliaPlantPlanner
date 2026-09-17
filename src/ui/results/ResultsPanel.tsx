@@ -1,8 +1,20 @@
 /**
  * The results panel: planner progress, the selected solution evaluated live
  * against the current settings, and edit mode (project task spec, Task A
- * step 5, Task B).
+ * step 5, Task B) — including drag and drop, layered over the same store
+ * actions and edit.ts rules that click-to-place and the keyboard paths use.
  */
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useDndContext,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type ScreenReaderInstructions,
+} from '@dnd-kit/core';
 import { useEffect, useState } from 'react';
 import { CROPS, CROP_BY_ID } from '../../data/crops';
 import { computeBuffs, describeBuffs } from '../../engine/buffs';
@@ -12,11 +24,15 @@ import { goalCropIds, goalLabel } from '../../engine/goals';
 import { precheck } from '../../engine/precheck';
 import { layoutStats, makeScoreContext } from '../../engine/score';
 import { shoppingList } from '../../engine/shopping';
-import type { CropId, Goal } from '../../engine/types';
+import type { CropId, Goal, TilePos } from '../../engine/types';
+import { CheckIcon, PencilIcon } from '../icons';
+import CropSwatch from '../CropSwatch';
 import { isStaleResult, useStore } from '../state/store';
 import { goalsInvolvingCrop } from './buffRequests';
 import CompareTable, { type CompareOption } from './CompareTable';
 import CropPalette from './CropPalette';
+import { createDragAnnouncements, gridCollisionDetection, tileKeyboardCoordinateGetter } from './dndConfig';
+import { planDrop, type DragItemData } from './dragDrop';
 import EditToolbar from './EditToolbar';
 import GardenGrid, { type EditTool } from './GardenGrid';
 import GoalSummary from './GoalSummary';
@@ -28,6 +44,28 @@ import ShoppingList from './ShoppingList';
 export interface ResultsPanelProps {
   onStop: () => void;
   onReoptimize: () => void;
+}
+
+// Stable across the component's lifetime (CROP_BY_ID is static data), so
+// these live at module scope rather than being recreated, or memoized,
+// every render.
+const dragAnnouncements = createDragAnnouncements(CROP_BY_ID);
+const dragInstructions: ScreenReaderInstructions = {
+  draggable:
+    'To pick this up, press space or enter. Use the arrow keys to move it over the garden, space or enter to drop it, or escape to cancel.',
+};
+
+/** The crop icon following the pointer/keyboard focus while dragging; reads the active drag from context. */
+function DragOverlayGhost() {
+  const { active } = useDndContext();
+  const data = active?.data.current as DragItemData | undefined;
+  const crop = data ? CROP_BY_ID.get(data.cropId) : undefined;
+  if (!crop) return null;
+  return (
+    <div className="garden-grid__drag-ghost">
+      <CropSwatch crop={crop} />
+    </div>
+  );
 }
 
 export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps) {
@@ -57,6 +95,11 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
   const [selectedCropId, setSelectedCropId] = useState<CropId | null>(null);
   const [selectedPlacementIndex, setSelectedPlacementIndex] = useState<number | null>(null);
   const [toolMessage, setToolMessage] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: tileKeyboardCoordinateGetter }),
+  );
 
   const idx = result ? Math.min(selectedIndex, result.solutions.length - 1) : 0;
   const currentPlacements = result ? solutionStates[idx]?.placements : undefined;
@@ -116,6 +159,13 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
     const goal = goalsById.get(r.goalId);
     return goal?.importance === 'must' && (r.status === 'partial' || r.status === 'unmet');
   });
+  const mustStatusBadge = mustUnmet.some((r) => r.status === 'unmet')
+    ? 'badge--danger'
+    : mustUnmet.length > 0
+      ? 'badge--warn'
+      : 'badge--ok';
+  const mustStatusText =
+    mustUnmet.length === 0 ? 'All goals met' : `${mustUnmet.length} Must goal${mustUnmet.length > 1 ? 's' : ''} not met`;
 
   const editedFlags = solutionStates.map((es) => es.history.length > 0);
 
@@ -158,6 +208,46 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
     }
   }
 
+  /**
+   * Carries out a drop (a palette chip placing a crop, or a plant being
+   * moved) using the same rules as the click/keyboard paths. A move is not
+   * a single store action (see the setup agent note in the task report), so
+   * it's an erase of the old tiles followed by a place at the new ones;
+   * planDrop already validated the whole thing first, so the place step is
+   * only expected to fail if something changed underneath it, in which case
+   * the erase is undone rather than leaving the plant missing.
+   */
+  function handleDragEnd(event: DragEndEvent) {
+    const overData = event.over?.data.current as TilePos | undefined;
+    if (!overData) return;
+    const itemData = event.active.data.current as DragItemData | undefined;
+    if (!itemData) return;
+
+    const plan = planDrop(garden, CROP_BY_ID, placements, editState.lockedTiles, itemData, overData);
+    if (plan.action === 'none') {
+      setToolMessage(plan.message);
+      return;
+    }
+    setToolMessage(null);
+
+    if (plan.action === 'place') {
+      const outcome = placeCrop(plan.cropId, plan.x, plan.y);
+      if (!outcome.ok && outcome.message) setToolMessage(outcome.message);
+      return;
+    }
+
+    const erased = eraseCrop(plan.from.x, plan.from.y);
+    if (!erased.ok) {
+      if (erased.message) setToolMessage(erased.message);
+      return;
+    }
+    const placed = placeCrop(plan.cropId, plan.to.x, plan.to.y);
+    if (!placed.ok) {
+      undoEdit();
+      if (placed.message) setToolMessage(placed.message);
+    }
+  }
+
   function handleToggleEditMode() {
     setEditMode((v) => !v);
     setTool('plant');
@@ -171,97 +261,119 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
   }
 
   return (
-    <section className="panel results-panel" aria-label="Results">
-      {stale && <p className="issue issue--warning">Your settings changed after this plan. Plan again to update it.</p>}
-      {status === 'stopped' && <p className="muted">Stopped early. This is the best layout found so far.</p>}
+    <DndContext
+      id="garden-dnd"
+      sensors={sensors}
+      collisionDetection={gridCollisionDetection}
+      onDragStart={() => setToolMessage(null)}
+      onDragEnd={handleDragEnd}
+      accessibility={{ announcements: dragAnnouncements, screenReaderInstructions: dragInstructions }}
+    >
+      <section className="panel results-panel" aria-label="Results">
+        {stale && <p className="issue issue--warning">Your settings changed after this plan. Plan again to update it.</p>}
+        {status === 'stopped' && <p className="muted">Stopped early. This is the best layout found so far.</p>}
 
-      <OptionTabs solutions={result.solutions} editedFlags={editedFlags} selectedIndex={idx} onSelect={selectSolution} />
+        <div className="results-toolbar">
+          <OptionTabs solutions={result.solutions} editedFlags={editedFlags} selectedIndex={idx} onSelect={selectSolution} />
+          <div className="results-toolbar__actions">
+            <button type="button" className={editMode ? 'primary' : ''} aria-pressed={editMode} onClick={handleToggleEditMode}>
+              {editMode ? <CheckIcon aria-hidden="true" /> : <PencilIcon aria-hidden="true" />}
+              {editMode ? 'Done editing' : 'Edit layout'}
+            </button>
+            <button type="button" onClick={handleUseArrangement}>
+              Use this arrangement
+            </button>
+          </div>
+        </div>
 
-      {mustUnmet.map((r) => (
-        <p key={r.goalId} className="issue issue--error" role="alert">
-          {`Must goal not met: ${r.label}.${r.reason ? ` ${r.reason}` : ''}`}
-        </p>
-      ))}
+        <div className="results-status">
+          <span className={`badge ${mustStatusBadge}`}>{mustStatusText}</span>
+        </div>
 
-      <GardenGrid
-        garden={garden}
-        placements={placements}
-        cropsById={CROP_BY_ID}
-        buffs={buffs}
-        goals={settings.goals}
-        goalCrops={goalCrops}
-        lockedTiles={editState.lockedTiles}
-        selectedIndex={editMode ? null : selectedPlacementIndex}
-        onSelectPlacement={editMode ? undefined : (i) => setSelectedPlacementIndex(i)}
-        interactive={
-          editMode
-            ? { tool, previewCropId: tool === 'plant' ? selectedCropId : null, onTileActivate: handleTileActivate }
-            : undefined
-        }
-      />
+        {mustUnmet.map((r) => (
+          <p key={r.goalId} className="issue issue--error" role="alert">
+            {`Must goal not met: ${r.label}.${r.reason ? ` ${r.reason}` : ''}`}
+          </p>
+        ))}
 
-      <div className="results-panel__toolbar">
-        <button type="button" aria-pressed={editMode} onClick={handleToggleEditMode}>
-          {editMode ? 'Done editing' : 'Edit layout'}
-        </button>
-        <button type="button" onClick={handleUseArrangement}>
-          Use this arrangement
-        </button>
-      </div>
-
-      {editMode && (
-        <>
-          <EditToolbar
-            tool={tool}
-            onToolChange={(t) => {
-              setTool(t);
-              setToolMessage(null);
-            }}
-            onUndo={undoEdit}
-            canUndo={editState.history.length > 0}
-            onUnlockAll={unlockAllForSelected}
-            canUnlockAll={editState.lockedTiles.length > 0}
-            onReoptimize={onReoptimize}
-            reoptimizing={reoptimizing}
-          />
-          {tool === 'plant' && (
-            <CropPalette
-              gardeningLevel={settings.gardeningLevel}
-              goalCrops={goalCrops}
-              helpers={settings.helpers}
-              selectedCropId={selectedCropId}
-              onSelect={setSelectedCropId}
-            />
-          )}
-          {toolMessage && (
-            <p className="issue issue--error" role="alert">
-              {toolMessage}
-            </p>
-          )}
-          {reoptimizeError && (
-            <p className="issue issue--error" role="alert">
-              {reoptimizeError}
-            </p>
-          )}
-        </>
-      )}
-
-      {!editMode && selectedCrop && selectedPlacement && (
-        <PlantDetails
-          crop={selectedCrop}
-          x={selectedPlacement.x}
-          y={selectedPlacement.y}
-          details={selectedDetails}
+        <GardenGrid
+          garden={garden}
+          placements={placements}
           cropsById={CROP_BY_ID}
-          goalsForCrop={selectedGoals}
+          buffs={buffs}
+          goals={settings.goals}
+          goalCrops={goalCrops}
+          lockedTiles={editState.lockedTiles}
+          selectedIndex={editMode ? null : selectedPlacementIndex}
+          onSelectPlacement={editMode ? undefined : (i) => setSelectedPlacementIndex(i)}
+          interactive={
+            editMode
+              ? { tool, previewCropId: tool === 'plant' ? selectedCropId : null, onTileActivate: handleTileActivate }
+              : undefined
+          }
         />
-      )}
 
-      <GoalSummary reports={goalReports} goalsById={goalsById} />
+        {editMode && (
+          <>
+            <EditToolbar
+              tool={tool}
+              onToolChange={(t) => {
+                setTool(t);
+                setToolMessage(null);
+              }}
+              onUndo={undoEdit}
+              canUndo={editState.history.length > 0}
+              onUnlockAll={unlockAllForSelected}
+              canUnlockAll={editState.lockedTiles.length > 0}
+              onReoptimize={onReoptimize}
+              reoptimizing={reoptimizing}
+            />
+            {tool === 'plant' && (
+              <CropPalette
+                gardeningLevel={settings.gardeningLevel}
+                goalCrops={goalCrops}
+                helpers={settings.helpers}
+                selectedCropId={selectedCropId}
+                onSelect={setSelectedCropId}
+              />
+            )}
+            {toolMessage && (
+              <p className="issue issue--error" role="alert">
+                {toolMessage}
+              </p>
+            )}
+            {reoptimizeError && (
+              <p className="issue issue--error" role="alert">
+                {reoptimizeError}
+              </p>
+            )}
+          </>
+        )}
 
-      <CompareTable goals={settings.goals} goalLabels={goalLabelsById} options={compareOptions} />
+        {!editMode && selectedCrop && selectedPlacement && (
+          <PlantDetails
+            crop={selectedCrop}
+            x={selectedPlacement.x}
+            y={selectedPlacement.y}
+            details={selectedDetails}
+            cropsById={CROP_BY_ID}
+            goalsForCrop={selectedGoals}
+          />
+        )}
 
-      <ShoppingList list={shopping} />
-    </section>
+        <GoalSummary reports={goalReports} goalsById={goalsById} />
+
+        <CompareTable goals={settings.goals} goalLabels={goalLabelsById} options={compareOptions} />
+
+        <ShoppingList list={shopping} />
+      </section>
+
+      {/* No drop-animation: DragOverlayGhost reads the active drag reactively, so it
+          disappears the instant the drop is committed rather than animating an
+          overlay that no longer has anything to show. */}
+      <DragOverlay dropAnimation={null}>
+        <DragOverlayGhost />
+      </DragOverlay>
+    </DndContext>
   );
 }

@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe('EditToolbar', () => {
-  it('shows Plant, Erase, Lock plant and Lock plot, marking the active one pressed', () => {
+  it('shows Plant, Erase, Lock plant and Lock plot as a tool group, checking the active one', () => {
     render(
       <EditToolbar
         tool="erase"
@@ -22,10 +22,11 @@ describe('EditToolbar', () => {
         reoptimizing={false}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Plant' }).getAttribute('aria-pressed')).toBe('false');
-    expect(screen.getByRole('button', { name: 'Erase' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Lock plant' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Lock plot' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Edit tool' })).toBeTruthy();
+    expect((screen.getByRole('radio', { name: 'Plant' }) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole('radio', { name: 'Erase' }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole('radio', { name: 'Lock plant' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Lock plot' })).toBeTruthy();
   });
 
   it('calls onToolChange with the clicked tool', async () => {
@@ -43,7 +44,7 @@ describe('EditToolbar', () => {
         reoptimizing={false}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'Lock plot' }));
+    await user.click(screen.getByRole('radio', { name: 'Lock plot' }));
     expect(onToolChange).toHaveBeenCalledWith('lockPlot');
   });
 

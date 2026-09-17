@@ -58,4 +58,20 @@ describe('GoalSummary', () => {
     const cells = within(row).getAllByRole('cell');
     expect(cells[cells.length - 1].textContent).toBe('');
   });
+
+  it('gives each status a distinct badge variant, never color alone (the badge always has status text too)', () => {
+    const goalsById = new Map(GOALS.map((g) => [g.id, g]));
+    render(<GoalSummary reports={REPORTS} goalsById={goalsById} />);
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows[0].querySelector('.badge--ok')?.textContent).toBe('Met');
+    expect(rows[1].querySelector('.badge--warn')?.textContent).toBe('Partly met');
+    expect(rows[2].querySelector('.badge--danger')?.textContent).toBe('Not met');
+  });
+
+  it('shows a score bar reflecting each report’s score', () => {
+    const goalsById = new Map(GOALS.map((g) => [g.id, g]));
+    render(<GoalSummary reports={REPORTS} goalsById={goalsById} />);
+    const bars = screen.getAllByRole('progressbar') as HTMLProgressElement[];
+    expect(bars.map((b) => b.value)).toEqual([1, 0.5, 0, 0.2]);
+  });
 });

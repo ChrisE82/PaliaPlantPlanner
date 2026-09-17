@@ -41,14 +41,18 @@ export default function CompareTable({ goals, goalLabels, options }: CompareTabl
             <tr key={g.id}>
               <th scope="row">{goalLabels.get(g.id) ?? g.id}</th>
               {options.map((o, i) => (
-                <td key={i}>{o.goalValues.get(g.id) ?? ''}</td>
+                <td key={i} className="num">
+                  {o.goalValues.get(g.id) ?? ''}
+                </td>
               ))}
             </tr>
           ))}
-          <tr>
+          <tr className="compare-table__totals">
             <th scope="row">Filled tiles</th>
             {options.map((o, i) => (
-              <td key={i}>{o.filledTiles}</td>
+              <td key={i} className="num">
+                {o.filledTiles}
+              </td>
             ))}
           </tr>
         </tbody>

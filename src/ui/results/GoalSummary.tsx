@@ -1,6 +1,7 @@
 /**
- * One row per goal: status, label, importance, value and reason (project
- * task spec, Task A step 5).
+ * One row per goal: a status badge, label, importance, value, a thin score
+ * bar and the reason (project task spec, Task A step 5). Falls back to a
+ * stacked card layout at narrow widths (see .goal-summary in results.css).
  */
 import { IMPORTANCE_NAMES, type Goal, type GoalReport } from '../../engine/types';
 
@@ -9,6 +10,13 @@ const STATUS_TEXT: Record<GoalReport['status'], string> = {
   partial: 'Partly met',
   unmet: 'Not met',
   info: 'Result',
+};
+
+const STATUS_BADGE: Record<GoalReport['status'], string> = {
+  met: 'badge--ok',
+  partial: 'badge--warn',
+  unmet: 'badge--danger',
+  info: '',
 };
 
 export interface GoalSummaryProps {
@@ -27,6 +35,7 @@ export default function GoalSummary({ reports, goalsById }: GoalSummaryProps) {
             <th scope="col">Goal</th>
             <th scope="col">Importance</th>
             <th scope="col">Value</th>
+            <th scope="col">Score</th>
             <th scope="col">Reason</th>
           </tr>
         </thead>
@@ -35,11 +44,23 @@ export default function GoalSummary({ reports, goalsById }: GoalSummaryProps) {
             const goal = goalsById.get(r.goalId);
             return (
               <tr key={r.goalId} className={`goal-summary__row goal-summary__row--${r.status}`}>
-                <td>{STATUS_TEXT[r.status]}</td>
-                <td>{r.label}</td>
-                <td>{goal ? IMPORTANCE_NAMES[goal.importance] : ''}</td>
-                <td>{r.value}</td>
-                <td>{r.reason ?? ''}</td>
+                <td data-label="Status">
+                  <span className={`badge ${STATUS_BADGE[r.status]}`.trim()}>{STATUS_TEXT[r.status]}</span>
+                </td>
+                <td data-label="Goal">{r.label}</td>
+                <td data-label="Importance">{goal ? IMPORTANCE_NAMES[goal.importance] : ''}</td>
+                <td data-label="Value">{r.value}</td>
+                <td data-label="Score" className="num">
+                  <progress
+                    className="goal-summary__score"
+                    value={r.score}
+                    max={1}
+                    aria-label={`Score ${Math.round(r.score * 100)}%`}
+                  />
+                </td>
+                <td data-label="Reason" className="muted">
+                  {r.reason ?? ''}
+                </td>
               </tr>
             );
           })}

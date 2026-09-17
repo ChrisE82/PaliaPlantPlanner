@@ -17,7 +17,7 @@ export interface PlantDetailsProps {
 
 export default function PlantDetails({ crop, x, y, details, cropsById, goalsForCrop }: PlantDetailsProps) {
   return (
-    <div className="plant-details">
+    <div className="card plant-details">
       <h3>{`${crop.name}, ${crop.size}x${crop.size}, column ${x + 1}, row ${y + 1}`}</h3>
       {details.length > 0 ? (
         <ul className="plant-details__buffs">

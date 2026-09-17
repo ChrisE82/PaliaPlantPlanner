@@ -1,9 +1,18 @@
 /**
  * The result grid (project task spec, Task A step 5 and Task B): soil tiles,
  * plot outlines, placed crops with buff dots, and (in edit mode) tap targets
- * for the active tool with a hover preview for the Plant tool.
+ * for the active tool with a hover preview for the Plant tool, plus drag and
+ * drop for placing and moving crops.
+ *
+ * An HTML CSS grid, one cell per tile: a `GardenTile` per soil tile (always
+ * present, so it keeps its `data-testid` and can be a drop target; only an
+ * empty tile gets the button role) and a `GardenPlacement` per plant,
+ * spanning its footprint with `grid-column`/`grid-row`. Plot outlines and
+ * the drag-preview ghost are drawn as a separate absolutely-positioned
+ * overlay so a crop crossing a plot border still looks continuous.
  */
-import { useId, useMemo, useState, type CSSProperties } from 'react';
+import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { RULES } from '../../engine/rules';
 import {
   BUFF_IDS,
@@ -18,7 +27,9 @@ import {
   type TilePos,
 } from '../../engine/types';
 import { cropIcon } from '../cropIcons';
+import { GripIcon, LockIcon } from '../icons';
 import { requestedBuffsForCrop } from './buffRequests';
+import { dragGhostFor, type DragGhost, type DragItemData } from './dragDrop';
 import { previewPlacement } from './edit';
 
 export type EditTool = 'plant' | 'erase' | 'lockPlant' | 'lockPlot';
@@ -43,7 +54,8 @@ export interface GardenGridProps {
   interactive?: GardenGridInteractive;
 }
 
-const TILE_PX_CAP = 48;
+const TILE_PX_MIN = 28;
+const TILE_PX_MAX = 52;
 
 function tileKey(x: number, y: number): string {
   return `${x},${y}`;
@@ -73,6 +85,193 @@ function placementAriaLabel(crop: Crop, x: number, y: number, received: BuffId[]
   return parts.join(' ');
 }
 
+/** Percentage box for a footprint of `size` tiles at (x, y), for the absolutely-positioned overlay. */
+function footprintBoxStyle(x: number, y: number, size: number, garden: Garden): CSSProperties {
+  return {
+    left: `${(x / garden.width) * 100}%`,
+    top: `${(y / garden.height) * 100}%`,
+    width: `${(size / garden.width) * 100}%`,
+    height: `${(size / garden.height) * 100}%`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// One soil tile: always present (drop target, data-testid), a keyboard
+// button only when empty and interactive.
+// ---------------------------------------------------------------------------
+
+interface GardenTileProps {
+  x: number;
+  y: number;
+  empty: boolean;
+  lockedEmpty: boolean;
+  interactive?: GardenGridInteractive;
+  dragEnabled: boolean;
+  onHover: (t: TilePos | null) => void;
+}
+
+function GardenTile({ x, y, empty, lockedEmpty, interactive, dragEnabled, onHover }: GardenTileProps) {
+  const { setNodeRef } = useDroppable({ id: `tile-${x}-${y}`, data: { x, y }, disabled: !dragEnabled });
+
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid={`grid-tile-${x}-${y}`}
+      className={`garden-grid__tile${lockedEmpty ? ' garden-grid__tile--locked' : ''}`}
+      style={{ gridColumn: x + 1, gridRow: y + 1 }}
+      role={interactive && empty ? 'button' : undefined}
+      tabIndex={interactive && empty ? 0 : undefined}
+      aria-label={interactive && empty ? `Empty tile, column ${x + 1}, row ${y + 1}.` : undefined}
+      onMouseEnter={() => interactive && onHover({ x, y })}
+      onClick={() => interactive?.onTileActivate(x, y)}
+      onKeyDown={(e) => {
+        if (!interactive || !empty) return;
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        interactive.onTileActivate(x, y);
+      }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// One placed crop: spans its footprint, draggable to move it via a grip
+// handle (pointer dragging also works from anywhere on the tile itself).
+// ---------------------------------------------------------------------------
+
+interface GardenPlacementProps {
+  placement: Placement;
+  index: number;
+  crop: Crop;
+  received: BuffId[];
+  missing: BuffId[];
+  locked: boolean;
+  selected: boolean;
+  interactive?: GardenGridInteractive;
+  dragEnabled: boolean;
+  onHover: (t: TilePos | null) => void;
+  onSelectPlacement?: (index: number) => void;
+}
+
+function GardenPlacement({
+  placement: p,
+  index,
+  crop,
+  received,
+  missing,
+  locked,
+  selected,
+  interactive,
+  dragEnabled,
+  onHover,
+  onSelectPlacement,
+}: GardenPlacementProps) {
+  const dragData: DragItemData = { kind: 'plant', index, cropId: p.cropId, x: p.x, y: p.y };
+  const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useDraggable({
+    id: `plant-${index}`,
+    data: dragData,
+    disabled: !dragEnabled,
+  });
+
+  const label = placementAriaLabel(crop, p.x, p.y, received, missing);
+  const showName = nameFits(crop);
+  const icon = cropIcon(crop.id);
+  const dots = BUFF_IDS.filter((b) => received.includes(b) || missing.includes(b));
+  const iconPct = crop.size === 1 ? '68%' : '52%';
+
+  function activate() {
+    if (interactive) interactive.onTileActivate(p.x, p.y);
+    else onSelectPlacement?.(index);
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      aria-pressed={!interactive && selected}
+      className={[
+        'garden-grid__placement',
+        !interactive && selected ? 'garden-grid__placement--selected' : '',
+        isDragging ? 'garden-grid__placement--dragging' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={
+        {
+          gridColumn: `${p.x + 1} / span ${crop.size}`,
+          gridRow: `${p.y + 1} / span ${crop.size}`,
+          '--crop-color': crop.color,
+          '--icon-pct': iconPct,
+        } as CSSProperties
+      }
+      onMouseEnter={() => onHover({ x: p.x, y: p.y })}
+      onClick={activate}
+      onPointerDown={(e) => dragEnabled && listeners?.onPointerDown?.(e)}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        activate();
+      }}
+    >
+      {icon ? (
+        <img className="garden-grid__icon" src={icon} alt="" />
+      ) : (
+        <span className="garden-grid__abbr">{crop.abbr}</span>
+      )}
+      {showName && <span className="garden-grid__name">{crop.name}</span>}
+      {dots.length > 0 && (
+        <span className="garden-grid__dots">
+          {dots.map((b) => (
+            <span
+              key={b}
+              className={`garden-grid__dot garden-grid__dot--${b}${received.includes(b) ? '' : ' garden-grid__dot--hollow'}`}
+            />
+          ))}
+        </span>
+      )}
+      {locked && (
+        <span className="garden-grid__lock-mark" aria-hidden="true">
+          <LockIcon />
+        </span>
+      )}
+      {dragEnabled && (
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          className="garden-grid__handle"
+          aria-label={`Move ${crop.name}, currently at column ${p.x + 1}, row ${p.y + 1}.`}
+          onClick={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
+          onPointerDown={(e) => {
+            // The tile itself also wires up listeners.onPointerDown (so the
+            // whole card is draggable by pointer, not just this handle); stop
+            // this one from bubbling to it, or the same pointerdown would
+            // reach dnd-kit's activator twice for the one drag.
+            e.stopPropagation();
+            listeners?.onPointerDown?.(e);
+          }}
+          onKeyDown={(e) => {
+            // Keep this handle's own keyboard-drag isolated from the tile's
+            // Enter/Space tool activation above (which must keep working
+            // exactly as it does today).
+            e.stopPropagation();
+            listeners?.onKeyDown?.(e);
+          }}
+        >
+          <GripIcon />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Grid
+// ---------------------------------------------------------------------------
+
 export default function GardenGrid({
   garden,
   placements,
@@ -85,8 +284,21 @@ export default function GardenGrid({
   onSelectPlacement,
   interactive,
 }: GardenGridProps) {
-  const hatchId = useId();
   const [hover, setHover] = useState<TilePos | null>(null);
+  const dragEnabled = !!interactive;
+
+  // Reads the ambient DndContext (a no-op default outside one, e.g. in
+  // ProgressView's read-only grid) so a live drag anywhere in edit mode
+  // — a palette chip or an existing plant — previews its drop footprint
+  // here, without ResultsPanel having to thread that state down as a prop.
+  const { active, over } = useDndContext();
+  const liveDragGhost = useMemo(() => {
+    if (!dragEnabled) return null;
+    const activeData = active?.data.current as DragItemData | undefined;
+    const overData = over?.data.current as TilePos | undefined;
+    if (!activeData || !overData) return null;
+    return dragGhostFor(garden, cropsById, placements, lockedTiles, activeData, overData);
+  }, [dragEnabled, active, over, garden, cropsById, placements, lockedTiles]);
 
   const occByTile = useMemo(() => {
     const occ = new Int16Array(garden.width * garden.height).fill(-1);
@@ -112,11 +324,6 @@ export default function GardenGrid({
     return tiles;
   }, [garden]);
 
-  const lockedEmptyTiles = useMemo(
-    () => soilTiles.filter((t) => lockedSet.has(tileKey(t.x, t.y)) && occByTile[t.y * garden.width + t.x] === -1),
-    [soilTiles, lockedSet, occByTile, garden.width],
-  );
-
   const buffsGiven = useMemo(() => {
     const given = new Set<BuffId>();
     for (const c of cropsById.values()) {
@@ -125,81 +332,53 @@ export default function GardenGrid({
     return BUFF_IDS.filter((b) => given.has(b));
   }, [cropsById]);
 
-  const preview =
-    interactive?.tool === 'plant' && interactive.previewCropId && hover
-      ? previewPlacement(garden, cropsById, lockedTiles, interactive.previewCropId, hover.x, hover.y)
-      : null;
-  const previewCrop = preview && interactive?.previewCropId ? cropsById.get(interactive.previewCropId) : undefined;
+  // While a drag is active, it takes over the ghost preview from the plain
+  // mouse-hover preview used for click-to-place.
+  const hoverGhost: DragGhost | null = useMemo(() => {
+    if (liveDragGhost || interactive?.tool !== 'plant' || !interactive.previewCropId || !hover) return null;
+    const crop = cropsById.get(interactive.previewCropId);
+    const preview = previewPlacement(garden, cropsById, lockedTiles, interactive.previewCropId, hover.x, hover.y);
+    if (!crop || !preview) return null;
+    return { cropId: interactive.previewCropId, size: crop.size, topLeft: preview.topLeft, valid: preview.valid };
+  }, [liveDragGhost, interactive, hover, garden, cropsById, lockedTiles]);
 
-  function activate(x: number, y: number) {
-    interactive?.onTileActivate(x, y);
-  }
+  const ghost = liveDragGhost ?? hoverGhost;
+
+  const gridStyle: CSSProperties = {
+    gridTemplateColumns: `repeat(${garden.width}, minmax(${TILE_PX_MIN}px, 1fr))`,
+    maxWidth: `${garden.width * TILE_PX_MAX}px`,
+  };
 
   return (
     <div className="garden-grid__wrap">
-      <svg
+      <div
         className="garden-grid"
-        style={{ maxWidth: `${garden.width * TILE_PX_CAP}px` }}
-        viewBox={`0 0 ${garden.width} ${garden.height}`}
+        style={gridStyle}
         role="group"
         aria-label="Garden layout"
         onMouseLeave={() => setHover(null)}
       >
-        <defs>
-          <pattern id={hatchId} width="0.22" height="0.22" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-            <line x1="0" y1="0" x2="0" y2="0.22" className="garden-grid__hatch-line" />
-          </pattern>
-        </defs>
-
         {soilTiles.map(({ x, y }) => {
           const empty = occByTile[y * garden.width + x] === -1;
           return (
-            <rect
+            <GardenTile
               key={`tile-${x}-${y}`}
-              className="garden-grid__tile"
-              data-testid={`grid-tile-${x}-${y}`}
               x={x}
               y={y}
-              width={1}
-              height={1}
-              role={interactive && empty ? 'button' : undefined}
-              tabIndex={interactive && empty ? 0 : undefined}
-              aria-label={interactive && empty ? `Empty tile, column ${x + 1}, row ${y + 1}.` : undefined}
-              onMouseEnter={() => interactive && setHover({ x, y })}
-              onClick={() => activate(x, y)}
-              onKeyDown={(e) => {
-                if (!interactive || !empty) return;
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault();
-                activate(x, y);
-              }}
+              empty={empty}
+              lockedEmpty={empty && lockedSet.has(tileKey(x, y))}
+              interactive={interactive}
+              dragEnabled={dragEnabled}
+              onHover={setHover}
             />
           );
         })}
 
-        {lockedEmptyTiles.map(({ x, y }) => (
-          <rect
-            key={`locked-${x}-${y}`}
-            className="garden-grid__locked-empty"
-            x={x}
-            y={y}
-            width={1}
-            height={1}
-            style={{ fill: `url(#${hatchId})` }}
-            aria-hidden="true"
-          />
-        ))}
-
-        {garden.plots.map((plot, i) => (
-          <rect
-            key={`plot-${i}`}
-            className="garden-grid__plot-outline"
-            x={plot.x}
-            y={plot.y}
-            width={RULES.plotSize}
-            height={RULES.plotSize}
-          />
-        ))}
+        <div className="garden-grid__plots" aria-hidden="true">
+          {garden.plots.map((plot, i) => (
+            <span key={`plot-${i}`} className="garden-grid__plot-outline" style={footprintBoxStyle(plot.x, plot.y, RULES.plotSize, garden)} />
+          ))}
+        </div>
 
         {placements.map((p, i) => {
           const crop = cropsById.get(p.cropId);
@@ -208,117 +387,58 @@ export default function GardenGrid({
           const received = decodeReceivedBuffs(receivedMask);
           const requested = requestedBuffsForCrop(goals, goalCrops, p.cropId);
           const missing = BUFF_IDS.filter((b) => requested.has(b) && !received.includes(b));
-          const dots = BUFF_IDS.filter((b) => received.includes(b) || missing.includes(b));
           const locked = footprintTiles(p.x, p.y, crop.size).some((t) => lockedSet.has(tileKey(t.x, t.y)));
-          const label = placementAriaLabel(crop, p.x, p.y, received, missing);
-          const showName = nameFits(crop);
-          const icon = cropIcon(crop.id);
-          const iconSize = crop.size === 1 ? 0.7 : crop.size * 0.55;
-          const cx = p.x + crop.size / 2;
-          const cy = p.y + crop.size / 2;
 
           return (
-            <g
+            <GardenPlacement
               key={`${p.x}-${p.y}-${p.cropId}`}
-              role="button"
-              tabIndex={0}
-              aria-label={label}
-              aria-pressed={!interactive && selectedIndex === i}
-              className={`garden-grid__placement${!interactive && selectedIndex === i ? ' garden-grid__placement--selected' : ''}`}
-              onMouseEnter={() => interactive && setHover({ x: p.x, y: p.y })}
-              onClick={() => (interactive ? activate(p.x, p.y) : onSelectPlacement?.(i))}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault();
-                if (interactive) activate(p.x, p.y);
-                else onSelectPlacement?.(i);
-              }}
-            >
-              <rect
-                className="garden-grid__crop"
-                x={p.x}
-                y={p.y}
-                width={crop.size}
-                height={crop.size}
-                rx={0.15}
-                style={{ '--crop-color': crop.color } as CSSProperties}
-              />
-              {icon ? (
-                <image
-                  className="garden-grid__icon"
-                  href={icon}
-                  x={cx - iconSize / 2}
-                  y={p.y + (crop.size - iconSize) / 2 - (showName ? 0.18 : 0.06)}
-                  width={iconSize}
-                  height={iconSize}
-                  preserveAspectRatio="xMidYMid meet"
-                />
-              ) : (
-                <text
-                  className="garden-grid__abbr"
-                  x={cx}
-                  y={showName ? cy - 0.16 : cy}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                >
-                  {crop.abbr}
-                </text>
-              )}
-              {showName && (
-                <text
-                  className="garden-grid__name"
-                  x={cx}
-                  y={icon ? p.y + crop.size - 0.42 : cy + 0.22}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                >
-                  {crop.name}
-                </text>
-              )}
-              {dots.map((b, di) => (
-                <circle
-                  key={b}
-                  className={`garden-grid__dot garden-grid__dot--${b}${received.includes(b) ? '' : ' garden-grid__dot--hollow'}`}
-                  cx={p.x + ((di + 1) / (dots.length + 1)) * crop.size}
-                  cy={p.y + crop.size - 0.14}
-                  r={0.075}
-                />
-              ))}
-              {locked && (
-                <g className="garden-grid__lock-mark" transform={`translate(${p.x + crop.size - 0.34}, ${p.y + 0.08})`}>
-                  <rect className="garden-grid__lock-mark-bg" x={-0.03} y={-0.03} width={0.34} height={0.34} rx={0.05} />
-                  <path className="garden-grid__lock-mark-shackle" d="M0.07 0.16 V0.11 a0.09 0.09 0 0 1 0.18 0 V0.16" />
-                  <rect className="garden-grid__lock-mark-body" x={0.03} y={0.15} width={0.26} height={0.15} rx={0.03} />
-                </g>
-              )}
-            </g>
+              placement={p}
+              index={i}
+              crop={crop}
+              received={received}
+              missing={missing}
+              locked={locked}
+              selected={selectedIndex === i}
+              interactive={interactive}
+              dragEnabled={dragEnabled}
+              onHover={setHover}
+              onSelectPlacement={onSelectPlacement}
+            />
           );
         })}
 
-        {preview && previewCrop && (
-          <rect
-            className={`garden-grid__preview ${preview.valid ? 'garden-grid__preview--valid' : 'garden-grid__preview--invalid'}`}
-            x={preview.topLeft.x}
-            y={preview.topLeft.y}
-            width={previewCrop.size}
-            height={previewCrop.size}
-            rx={0.15}
-          />
-        )}
-      </svg>
+        {ghost &&
+          (() => {
+            const ghostCrop = cropsById.get(ghost.cropId);
+            if (!ghostCrop) return null;
+            return (
+              <span
+                className={`garden-grid__ghost ${ghost.valid ? 'garden-grid__ghost--valid' : 'garden-grid__ghost--invalid'}`}
+                style={footprintBoxStyle(ghost.topLeft.x, ghost.topLeft.y, ghost.size, garden)}
+                aria-hidden="true"
+              />
+            );
+          })()}
+      </div>
 
-      <ul className="garden-grid__legend">
-        {buffsGiven.map((b) => (
-          <li key={b}>
-            <span className={`garden-grid__legend-dot garden-grid__dot--${b}`} aria-hidden="true" />
-            {BUFF_NAMES[b]}
-          </li>
-        ))}
-        <li>
-          <span className="garden-grid__legend-dot garden-grid__legend-dot--hollow" aria-hidden="true" />
-          A goal asks for this buff, but the plant doesn’t have it
-        </li>
-      </ul>
+      <Legend buffsGiven={buffsGiven} />
     </div>
+  );
+}
+
+function Legend({ buffsGiven }: { buffsGiven: readonly BuffId[] }): ReactNode {
+  return (
+    <ul className="garden-grid__legend">
+      {buffsGiven.map((b) => (
+        <li key={b}>
+          <span className={`garden-grid__dot garden-grid__dot--${b}`} aria-hidden="true" />
+          {BUFF_NAMES[b]}
+        </li>
+      ))}
+      <li>
+        <span className="garden-grid__dot garden-grid__dot--muted-hollow" aria-hidden="true" />
+        A goal asks for this buff, but the plant doesn’t have it
+      </li>
+    </ul>
   );
 }

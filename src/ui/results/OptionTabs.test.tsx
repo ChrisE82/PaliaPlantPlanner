@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { LayoutSolution } from '../../engine/types';
 import OptionTabs from './OptionTabs';
@@ -36,11 +36,12 @@ describe('OptionTabs', () => {
     expect(tabs[1].getAttribute('aria-selected')).toBe('true');
   });
 
-  it('marks an edited tab with "(edited)"', () => {
+  it('marks an edited tab with an "Edited" badge', () => {
     const solutions = [solution('3x3 block'), solution('Row of 9')];
     render(<OptionTabs solutions={solutions} editedFlags={[false, true]} selectedIndex={0} onSelect={() => {}} />);
-    expect(screen.getByText('Option 2 (edited)')).toBeTruthy();
-    expect(screen.queryByText('Best (edited)')).toBeNull();
+    const tabs = screen.getAllByRole('tab');
+    expect(within(tabs[1]).getByText('Edited').className).toContain('badge');
+    expect(within(tabs[0]).queryByText('Edited')).toBeNull();
   });
 
   it('calls onSelect with the tab index when clicked', async () => {

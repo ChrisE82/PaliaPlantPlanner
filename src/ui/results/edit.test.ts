@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { CROP_BY_ID } from '../../data/crops';
 import { buildGarden } from '../../engine/garden';
 import type { Placement, PlotPos, TilePos } from '../../engine/types';
-import { eraseAt, placeCropAt, previewPlacement, resolveTopLeft, toggleLockAtTile, toggleLockPlotAt } from './edit';
+import {
+  eraseAt,
+  placeCropAt,
+  previewMove,
+  previewPlacement,
+  resolveTopLeft,
+  toggleLockAtTile,
+  toggleLockPlotAt,
+} from './edit';
 
 const TWO_PLOTS: PlotPos[] = [{ x: 0, y: 0 }, { x: 3, y: 0 }]; // 6 wide x 3 tall, no gap
 const GAP_PLOTS: PlotPos[] = [{ x: 0, y: 0 }, { x: 6, y: 0 }]; // gap at x = 3..5
@@ -190,5 +198,50 @@ describe('toggleLockPlotAt (Lock plot tool)', () => {
     const afterLock = toggleLockPlotAt(garden, [otherLock], 4, 1);
     const afterUnlock = toggleLockPlotAt(garden, afterLock, 4, 1);
     expect(afterUnlock).toEqual([otherLock]);
+  });
+});
+
+describe('previewMove', () => {
+  it('resolves to the nearest valid top-left covering the tapped tile, same as previewPlacement', () => {
+    const garden = buildGarden(TWO_PLOTS);
+    const source: Placement = { cropId: 'apple', x: 0, y: 0 };
+    const preview = previewMove(garden, CROP_BY_ID, [source], [], source, 0, 2);
+    expect(preview).toEqual({ topLeft: { x: 0, y: 0 }, valid: true, message: null });
+  });
+
+  it('refuses and names the crop when the dragged plant itself is locked', () => {
+    const garden = buildGarden(TWO_PLOTS);
+    const source: Placement = { cropId: 'wheat', x: 3, y: 0 };
+    const preview = previewMove(garden, CROP_BY_ID, [source], [{ x: 3, y: 0 }], source, 4, 0);
+    expect(preview).toEqual({ topLeft: { x: 3, y: 0 }, valid: false, message: 'Wheat is locked. Unlock it first.' });
+  });
+
+  it('refuses, at the tapped tile, when nothing fits there at all', () => {
+    const garden = buildGarden(GAP_PLOTS);
+    const source: Placement = { cropId: 'wheat', x: 0, y: 0 };
+    const preview = previewMove(garden, CROP_BY_ID, [source], [], source, 4, 1);
+    expect(preview).toEqual({ topLeft: { x: 4, y: 1 }, valid: false, message: 'Wheat doesn’t fit there.' });
+  });
+
+  it('refuses and names the blocker when the new footprint covers a different locked plant', () => {
+    const garden = buildGarden(TWO_PLOTS);
+    const mover: Placement = { cropId: 'wheat', x: 0, y: 0 };
+    const blocker: Placement = { cropId: 'corn', x: 5, y: 2 };
+    const preview = previewMove(garden, CROP_BY_ID, [mover, blocker], [{ x: 5, y: 2 }], mover, 5, 2);
+    expect(preview).toEqual({ topLeft: { x: 5, y: 2 }, valid: false, message: 'Corn is locked. Unlock it first.' });
+  });
+
+  it('refuses over a locked empty tile with the generic message', () => {
+    const garden = buildGarden(TWO_PLOTS);
+    const mover: Placement = { cropId: 'wheat', x: 0, y: 0 };
+    const preview = previewMove(garden, CROP_BY_ID, [mover], [{ x: 4, y: 1 }], mover, 4, 1);
+    expect(preview).toEqual({ topLeft: { x: 4, y: 1 }, valid: false, message: 'That tile is locked. Unlock it first.' });
+  });
+
+  it('allows sliding onto its own current tiles', () => {
+    const garden = buildGarden(TWO_PLOTS);
+    const mover: Placement = { cropId: 'blueberry', x: 0, y: 0 };
+    const preview = previewMove(garden, CROP_BY_ID, [mover], [], mover, 1, 1);
+    expect(preview).toEqual({ topLeft: { x: 1, y: 1 }, valid: true, message: null });
   });
 });

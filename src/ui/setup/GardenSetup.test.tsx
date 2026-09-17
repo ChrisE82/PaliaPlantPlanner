@@ -40,9 +40,9 @@ describe('GardenSetup', () => {
   it('switches to custom arrangement mode and shows the arrangement editor', async () => {
     const user = userEvent.setup();
     render(<GardenSetup />);
-    await user.click(screen.getByRole('radio', { name: 'Use my own arrangement' }));
+    await user.click(screen.getByRole('radio', { name: 'Draw my own' }));
     expect(screen.getByRole('group', { name: 'Garden plot arrangement editor' })).toBeTruthy();
-    expect(screen.getByText('Plots: 0')).toBeTruthy();
+    expect(screen.getByText('0', { selector: '.stepper__value' })).toBeTruthy();
   });
 
   it('the plots stepper clamps between 1 and 9', async () => {

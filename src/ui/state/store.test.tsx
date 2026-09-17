@@ -112,6 +112,72 @@ describe('goal editing', () => {
     expect(useStore.getState().settings.goals.some((g) => g.id === id)).toBe(false);
   });
 
+  describe('reorderGoal (the goals board drag-and-drop)', () => {
+    it('moving a goal to another lane changes its importance and places it at the given position', async () => {
+      const { useStore } = await freshStore();
+      // Default example: [apple/must, apple/high, all/medium, wheat/low].
+      const goalsBefore = useStore.getState().settings.goals;
+      const wheat = goalsBefore[3];
+      const appleHigh = goalsBefore[1];
+      expect(wheat.importance).toBe('low');
+
+      useStore.getState().reorderGoal(wheat.id, 'high', 0);
+
+      const goals = useStore.getState().settings.goals;
+      expect(goals.find((g) => g.id === wheat.id)?.importance).toBe('high');
+      // Dropped at index 0 of the High lane, so it now precedes the apple/high goal.
+      expect(goals.filter((g) => g.importance === 'high').map((g) => g.id)).toEqual([wheat.id, appleHigh.id]);
+      // The Low lane is now empty; Must and Medium are untouched.
+      expect(goals.filter((g) => g.importance === 'low')).toEqual([]);
+    });
+
+    it('dropping at the end of a lane places the goal after that lane’s other goals', async () => {
+      const { useStore } = await freshStore();
+      const apple = useStore.getState().settings.goals[0]; // must
+      useStore.getState().reorderGoal(apple.id, 'medium', 5); // past the end: appends
+      const mediumLane = useStore.getState().settings.goals.filter((g) => g.importance === 'medium');
+      expect(mediumLane.at(-1)?.id).toBe(apple.id);
+    });
+
+    it('reorders within the same lane without touching other lanes', async () => {
+      const { useStore } = await freshStore();
+      // Give the High lane two goals so within-lane order is meaningful.
+      useStore.getState().addGoal();
+      const added = useStore.getState().settings.goals.at(-1)!;
+      useStore.getState().updateGoal(added.id, { measure: 'harvestBoost', amount: { kind: 'all' }, importance: 'high' });
+
+      const beforeIds = useStore.getState().settings.goals.map((g) => g.id);
+      const highLaneBefore = useStore.getState().settings.goals.filter((g) => g.importance === 'high').map((g) => g.id);
+      expect(highLaneBefore).toEqual([beforeIds[1], added.id]); // apple/high, then the new one
+
+      // Move the second High goal to index 0 of its own lane.
+      useStore.getState().reorderGoal(added.id, 'high', 0);
+
+      const goals = useStore.getState().settings.goals;
+      expect(goals.filter((g) => g.importance === 'high').map((g) => g.id)).toEqual([added.id, beforeIds[1]]);
+      // Every other goal keeps its importance and relative order.
+      expect(goals.filter((g) => g.importance === 'must').map((g) => g.id)).toEqual([beforeIds[0]]);
+      expect(goals.filter((g) => g.importance === 'medium').map((g) => g.id)).toEqual([beforeIds[2]]);
+      expect(goals.filter((g) => g.importance === 'low').map((g) => g.id)).toEqual([beforeIds[3]]);
+    });
+
+    it('is a no-op for an unknown goal id', async () => {
+      const { useStore } = await freshStore();
+      const before = useStore.getState().settings.goals;
+      useStore.getState().reorderGoal('does-not-exist', 'high', 0);
+      expect(useStore.getState().settings.goals).toEqual(before);
+    });
+
+    it('clamps an out-of-range or negative index into the lane', async () => {
+      const { useStore } = await freshStore();
+      const apple = useStore.getState().settings.goals[0];
+      useStore.getState().reorderGoal(apple.id, 'must', -5);
+      expect(useStore.getState().settings.goals.filter((g) => g.importance === 'must').map((g) => g.id)).toEqual([
+        apple.id,
+      ]);
+    });
+  });
+
   it('changing measure from quantity to a buff turns Maximize into All plants', async () => {
     const { useStore } = await freshStore();
     useStore.getState().addGoal();

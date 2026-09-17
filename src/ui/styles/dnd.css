@@ -1,0 +1,46 @@
+/* Drag and drop (dnd-kit): drag handles, drag overlay, drop targets. */
+
+.drag-handle {
+  touch-action: none;
+}
+
+/* -------------------------------------------------------------------------
+   Goals board
+   ------------------------------------------------------------------------- */
+
+/* The source card, in place, while its DragOverlay clone follows the pointer. */
+.goal-card--dragging {
+  opacity: 0.4;
+}
+
+/* The DragOverlay clone: the card "lifted" off the board. */
+.goal-card--overlay {
+  cursor: grabbing;
+  box-shadow: var(--shadow-drag);
+}
+
+.goal-lane--over {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-border);
+}
+
+/* -------------------------------------------------------------------------
+   Arrangement editor
+   ------------------------------------------------------------------------- */
+
+.arrangement-editor__plot-button--dragging .arrangement-editor__plot {
+  opacity: 0.35;
+}
+
+.arrangement-editor__drop-preview {
+  fill: color-mix(in srgb, var(--accent) 35%, transparent);
+  stroke: var(--accent);
+  stroke-width: 0.1;
+  stroke-dasharray: 0.35 0.25;
+  pointer-events: none;
+}
+
+.arrangement-editor__drop-preview--invalid {
+  fill: color-mix(in srgb, var(--danger) 30%, transparent);
+  stroke: var(--danger);
+}

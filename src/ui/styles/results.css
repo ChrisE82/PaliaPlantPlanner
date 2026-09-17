@@ -1,0 +1,585 @@
+/* Results panel: toolbar, grid, drag and drop, options, summary, editing. */
+
+/* -------------------------------------------------------------------------
+   Results panel
+   ------------------------------------------------------------------------- */
+
+.results-panel > * + * {
+  margin-top: var(--s-4);
+}
+
+.results-panel--empty {
+  min-height: 12rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* Shared by CompareTable, ShoppingList and GoalSummary's Value/Score columns. */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------------------
+   Results toolbar: option tabs + Edit layout / Use this arrangement
+   ------------------------------------------------------------------------- */
+
+.results-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.results-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-left: auto;
+}
+
+.results-status {
+  display: flex;
+}
+
+/* -------------------------------------------------------------------------
+   Planning progress
+   ------------------------------------------------------------------------- */
+
+.progress-view__stage {
+  font-weight: 600;
+}
+
+.progress-view__bar {
+  display: block;
+  width: 100%;
+  height: 0.9em;
+  accent-color: var(--accent);
+}
+
+.progress-view__actions {
+  margin-top: 0.6em;
+}
+
+.progress-view__best {
+  margin-top: var(--s-4);
+}
+
+.progress-view__best-label {
+  font-weight: 600;
+  margin-bottom: 0.4em;
+}
+
+/* -------------------------------------------------------------------------
+   Garden grid: an HTML CSS grid, one cell per tile. Plot outlines and the
+   drag-preview ghost are a separate absolutely-positioned overlay so a crop
+   crossing a plot border still looks continuous (see GardenGrid.tsx).
+   ------------------------------------------------------------------------- */
+
+.garden-grid__wrap {
+  width: 100%;
+  overflow-x: auto;
+  /* Room for the focus ring and the hover lift so neither gets clipped. */
+  padding: 4px;
+  margin: -4px;
+}
+
+.garden-grid {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+}
+
+.garden-grid__tile {
+  position: relative;
+  aspect-ratio: 1;
+  background: var(--soil);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: background var(--dur-1) var(--ease);
+}
+
+.garden-grid__tile--locked {
+  background-image: repeating-linear-gradient(45deg, var(--text-subtle) 0 1px, transparent 1px 7px);
+}
+
+.garden-grid__tile[role='button'] {
+  cursor: pointer;
+}
+
+.garden-grid__tile[role='button']:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--soil));
+}
+
+/* The plot-outline layer sits above bare soil but below plants and tiles
+   remain in normal flow (z-index: auto), so this only needs a z-index
+   relative to the placements below. */
+.garden-grid__plots {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.garden-grid__plot-outline {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--plot-outline);
+  border-radius: 5px;
+}
+
+.garden-grid__placement {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--crop-color) 38%, var(--tile-base));
+  border: 1px solid color-mix(in srgb, var(--crop-color) 85%, var(--tile-base));
+  border-radius: 6px;
+  touch-action: none;
+  animation: garden-grid-place var(--dur-3) var(--ease);
+  transition:
+    transform var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    opacity var(--dur-2) var(--ease);
+}
+
+.garden-grid__placement:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  z-index: 4;
+}
+
+.garden-grid__placement--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.garden-grid__placement--dragging {
+  opacity: 0.35;
+}
+
+@keyframes garden-grid-place {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.garden-grid__icon {
+  width: var(--icon-pct, 55%);
+  height: var(--icon-pct, 55%);
+  object-fit: contain;
+  filter: drop-shadow(0 0 1.5px var(--icon-halo));
+  pointer-events: none;
+}
+
+.garden-grid__abbr {
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.garden-grid__name {
+  max-width: 100%;
+  padding: 0 2px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.garden-grid__dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.garden-grid__dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid transparent;
+  border-radius: 50%;
+}
+
+.garden-grid__dot--waterRetain {
+  background: var(--buff-waterRetain);
+  border-color: var(--buff-waterRetain);
+}
+
+.garden-grid__dot--weedBlock {
+  background: var(--buff-weedBlock);
+  border-color: var(--buff-weedBlock);
+}
+
+.garden-grid__dot--harvestBoost {
+  background: var(--buff-harvestBoost);
+  border-color: var(--buff-harvestBoost);
+}
+
+.garden-grid__dot--qualityBoost {
+  background: var(--buff-qualityBoost);
+  border-color: var(--buff-qualityBoost);
+}
+
+.garden-grid__dot--growthBoost {
+  background: var(--buff-growthBoost);
+  border-color: var(--buff-growthBoost);
+}
+
+/* A goal wants this buff but the plant lacks it: outline only, same as the
+   legend's explanatory swatch. Declared after the buff colors above so it
+   wins on background while keeping their border-color. */
+.garden-grid__dot--hollow {
+  background: var(--tile-base);
+}
+
+.garden-grid__dot--muted-hollow {
+  background: var(--tile-base);
+  border-color: var(--border-strong);
+}
+
+.garden-grid__lock-mark {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--tile-base) 55%, transparent);
+  color: var(--text);
+  pointer-events: none;
+}
+
+.garden-grid__lock-mark svg {
+  width: 65%;
+  height: 65%;
+}
+
+/* Drag handle: a small, always-visible-enough (not hover-only, so touch and
+   keyboard users can find it) affordance for moving a placed plant. Pointer
+   dragging also works from anywhere on the tile; this is also the one
+   keyboard-operable drag activator, kept separate from the tile's own
+   Enter/Space tool activation (see GardenGrid.tsx). */
+.garden-grid__handle {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  display: grid;
+  place-items: center;
+  width: 1.3em;
+  height: 1.3em;
+  padding: 0;
+  min-height: 0;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--tile-base) 65%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: grab;
+  touch-action: none;
+  transition:
+    opacity var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.garden-grid__placement:hover .garden-grid__handle,
+.garden-grid__handle:hover,
+.garden-grid__handle:focus-visible {
+  opacity: 1;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.garden-grid__handle:active {
+  cursor: grabbing;
+}
+
+.garden-grid__handle svg {
+  width: 68%;
+  height: 68%;
+}
+
+/* Live drop-target preview, from either a drag or the Plant tool's hover.
+   Solid vs. dashed marks valid vs. invalid so it never relies on color alone. */
+.garden-grid__ghost {
+  position: absolute;
+  z-index: 5;
+  box-sizing: border-box;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.garden-grid__ghost--valid {
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.garden-grid__ghost--invalid {
+  border: 2px dashed var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+/* The floating icon that follows the pointer/keyboard focus in DragOverlay. */
+.garden-grid__drag-ghost {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-drag);
+  cursor: grabbing;
+}
+
+.garden-grid__legend {
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.garden-grid__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.garden-grid__legend .garden-grid__dot {
+  width: 9px;
+  height: 9px;
+}
+
+/* -------------------------------------------------------------------------
+   Option tabs: a row of pills, each with a thumbnail, label and caption
+   ------------------------------------------------------------------------- */
+
+.option-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.option-tabs__tab {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0.3em 0.9em 0.3em 0.35em;
+  text-align: left;
+  border-radius: var(--r-pill);
+}
+
+.option-tabs__tab--selected {
+  border-color: var(--accent-soft-border);
+  background: var(--accent-soft);
+}
+
+.option-tabs__thumb {
+  width: 1.7em;
+  height: 1.7em;
+  flex: 0 0 auto;
+  padding: 3px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.option-tabs__thumb rect {
+  fill: var(--text-subtle);
+}
+
+.option-tabs__tab--selected .option-tabs__thumb rect {
+  fill: var(--accent);
+}
+
+.option-tabs__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.option-tabs__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.option-tabs__arrangement {
+  font-size: var(--fs-xs);
+}
+
+/* -------------------------------------------------------------------------
+   Plant details
+   ------------------------------------------------------------------------- */
+
+.plant-details h3 {
+  margin: 0 0 0.5em;
+  font-size: var(--fs-md);
+}
+
+.plant-details h4 {
+  margin: 0.9em 0 0.35em;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.plant-details__buffs,
+.plant-details__goals {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: var(--fs-sm);
+}
+
+/* -------------------------------------------------------------------------
+   Edit toolbar and crop palette
+   ------------------------------------------------------------------------- */
+
+.edit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  align-items: center;
+}
+
+.edit-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.crop-palette fieldset {
+  margin: 0 0 var(--s-3);
+}
+
+.crop-palette fieldset:last-child {
+  margin-bottom: 0;
+}
+
+.crop-palette__chip {
+  touch-action: none;
+}
+
+.crop-palette__chip--dragging {
+  opacity: 0.4;
+}
+
+/* -------------------------------------------------------------------------
+   Goal summary: status badge, label, importance, value, a thin score bar
+   and the reason. Stacks into cards below 480px.
+   ------------------------------------------------------------------------- */
+
+.goal-summary__score {
+  display: block;
+  width: 100%;
+  min-width: 64px;
+  height: 0.5em;
+  accent-color: var(--accent);
+}
+
+@media (max-width: 480px) {
+  .goal-summary thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .goal-summary,
+  .goal-summary tbody,
+  .goal-summary tr,
+  .goal-summary td {
+    display: block;
+    width: 100%;
+  }
+
+  .goal-summary tr {
+    padding: var(--s-2) 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .goal-summary tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .goal-summary td {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    padding: 0.15em 0;
+    border-bottom: none;
+    text-align: left;
+  }
+
+  .goal-summary td::before {
+    content: attr(data-label);
+    flex: 0 0 5.5em;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--text-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Compare table and shopping list: numbers right-aligned, totals stand out
+   ------------------------------------------------------------------------- */
+
+.compare-table__totals th,
+.compare-table__totals td {
+  border-top: 2px solid var(--border-strong);
+  font-weight: 650;
+}
+
+.shopping-list__crop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+
+.shopping-list__totals td {
+  padding-top: 0.7em;
+  border-top: 2px solid var(--border-strong);
+  font-weight: 650;
+  text-align: right;
+}

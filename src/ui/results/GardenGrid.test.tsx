@@ -43,14 +43,14 @@ describe('GardenGrid crop icons', () => {
       />,
     );
 
-    const icons = container.querySelectorAll('image.garden-grid__icon');
+    const icons = container.querySelectorAll('img.garden-grid__icon');
     // With no icon files, the grid shows short labels instead.
     if (icons.length === 0) {
       expect(screen.getAllByText('Ap').length).toBe(1);
       return;
     }
     expect(icons.length).toBe(PLACEMENTS.length);
-    expect(icons[0].getAttribute('href')).toContain('apple');
+    expect(icons[0].getAttribute('src')).toContain('apple');
   });
 });
 
@@ -115,17 +115,20 @@ describe('GardenGrid hollow-dot rule', () => {
       />,
     );
 
-    // Scoped to <circle> so the legend's own color swatches (which reuse
-    // these buff classes) aren't mistaken for a plant's dot.
-    const harvestDot = container.querySelector('circle.garden-grid__dot--harvestBoost');
-    const waterDot = container.querySelector('circle.garden-grid__dot--waterRetain');
+    // Scoped to the grid itself (not .garden-grid__wrap) so the legend's own
+    // swatches, which reuse these same buff classes, aren't mistaken for a
+    // plant's dot: the legend always lists every buff any crop in the whole
+    // crop table gives, regardless of what's actually in this layout.
+    const grid = container.querySelector('.garden-grid')!;
+    const harvestDot = grid.querySelector('.garden-grid__dot--harvestBoost');
+    const waterDot = grid.querySelector('.garden-grid__dot--waterRetain');
     expect(harvestDot).toBeTruthy();
     expect(harvestDot?.classList.contains('garden-grid__dot--hollow')).toBe(false);
     expect(waterDot).toBeTruthy();
     expect(waterDot?.classList.contains('garden-grid__dot--hollow')).toBe(true);
 
     // Nothing requests or gives Weed Block here, so no dot is drawn for it.
-    expect(container.querySelector('circle.garden-grid__dot--weedBlock')).toBeNull();
+    expect(grid.querySelector('.garden-grid__dot--weedBlock')).toBeNull();
   });
 
   it('only shows a hollow dot for "All goal crops" on a crop that is itself a goal crop', () => {
@@ -144,7 +147,7 @@ describe('GardenGrid hollow-dot rule', () => {
       />,
     );
 
-    const dots = container.querySelectorAll('circle.garden-grid__dot--waterRetain');
+    const dots = container.querySelector('.garden-grid')!.querySelectorAll('.garden-grid__dot--waterRetain');
     // Only apple's hollow waterRetain dot; the three wheat plants (not goal crops) get none.
     expect(dots.length).toBe(1);
     expect(dots[0].classList.contains('garden-grid__dot--hollow')).toBe(true);
@@ -163,7 +166,8 @@ describe('GardenGrid hollow-dot rule', () => {
         lockedTiles={[]}
       />,
     );
-    expect(container.querySelectorAll('circle.garden-grid__dot').length).toBe(0);
+    // Scoped to the grid: the legend still lists the buffs crops give in general.
+    expect(container.querySelector('.garden-grid')!.querySelectorAll('.garden-grid__dot').length).toBe(0);
   });
 });
 
@@ -258,6 +262,6 @@ describe('GardenGrid locks', () => {
       />,
     );
     expect(container.querySelector('.garden-grid__lock-mark')).toBeTruthy();
-    expect(container.querySelector('.garden-grid__locked-empty')).toBeTruthy();
+    expect(container.querySelector('.garden-grid__tile--locked')).toBeTruthy();
   });
 });
