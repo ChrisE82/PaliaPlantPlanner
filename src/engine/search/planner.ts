@@ -24,6 +24,7 @@ import type {
 import { Evaluator } from './evaluate';
 import { greedyFill, strategyForRestart } from './greedy';
 import { runLahc } from './lahc';
+import { polish } from './polish';
 import { compileProblem, type CompiledProblem } from './problem';
 import { Rng } from './rng';
 import { LayoutState } from './state';
@@ -100,6 +101,7 @@ export function optimizeArrangement(task: OptimizeTask): OptimizeResult {
 
     const state = (r === 0 ? fullFixedBase : lockedOnlyBase).clone();
     greedyFill(problem, state, rng, strategyForRestart(r), deadline);
+    polish(problem, state, evaluator, rng, deadline);
 
     const result = runLahc(problem, state, rng, evaluator, {
       historyLength,
@@ -108,7 +110,8 @@ export function optimizeArrangement(task: OptimizeTask): OptimizeResult {
       deadline,
     });
     totalIterations += result.iterations;
-    insertDistinct(found, result.best, result.bestScore, keep, problem);
+    const polishedScore = polish(problem, result.best, evaluator, rng, deadline);
+    insertDistinct(found, result.best, polishedScore, keep, problem);
   }
 
   return {
@@ -218,6 +221,7 @@ function deriveSeed(base: number, salt: number): number {
 /** Score entries for the four importance levels plus filled tiles (see types.ts ScoreVector). */
 const GOAL_AND_FILL_ENTRIES = 9;
 const REFINE_CANDIDATES = 24;
+const ALWAYS_REFINED_COMPACT = 4;
 const FINISH_CANDIDATES = 3;
 const MIN_TASK_TIME_MS = 5;
 
@@ -393,7 +397,12 @@ async function planSuggest(
   const finishingBudget = Math.max(0, request.timeBudgetMs - screeningBudget - refiningBudget);
 
   await runStage('screening', allCandidates, screeningBudget, 1, SCREEN_RESTARTS, SCREEN_ITERATIONS, 1);
-  const refineCandidates = ranked(allCandidates).slice(0, REFINE_CANDIDATES);
+  // Short screening runs are noisy, and compact arrangements win ties, so the
+  // most compact arrangements (first in enumeration order) are always refined.
+  const refineCandidates = [...ranked(allCandidates).slice(0, REFINE_CANDIDATES)];
+  for (const compact of allCandidates.slice(0, ALWAYS_REFINED_COMPACT)) {
+    if (!refineCandidates.some((c) => c.index === compact.index)) refineCandidates.push(compact);
+  }
   await runStage('refining', refineCandidates, refiningBudget, 2, REFINE_RESTARTS, REFINE_ITERATIONS, 1);
   const finishCandidates = ranked(refineCandidates).slice(0, FINISH_CANDIDATES);
   await runStage('finishing', finishCandidates, finishingBudget, 3, FINISH_RESTARTS, FINISH_ITERATIONS, 3);
