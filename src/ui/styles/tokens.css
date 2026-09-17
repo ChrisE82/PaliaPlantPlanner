@@ -1,0 +1,185 @@
+/* -------------------------------------------------------------------------
+   Design tokens.
+
+   Light is the default. The dark set applies when the system asks for it, or
+   when the theme control sets data-theme="dark" on <html>; data-theme always
+   wins over the system setting.
+   ------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces and text */
+  --bg: #f3f6f1;
+  --bg-tint: #e7ede3;
+  --surface: #ffffff;
+  --surface-2: #eef2ea;
+  --surface-3: #e3e9dd;
+  --text: #16201a;
+  --text-muted: #5b6b60;
+  --text-subtle: #7e8c82;
+  --border: #dde4d7;
+  --border-strong: #c5d0bd;
+
+  /* Brand */
+  --accent: #2e7d4f;
+  --accent-hover: #276a43;
+  --accent-press: #1f5636;
+  --accent-text: #ffffff;
+  --accent-soft: #e3f0e7;
+  --accent-soft-border: #b9d9c6;
+  --focus-ring: rgba(46, 125, 79, 0.45);
+
+  /* Status */
+  --ok: #2e7d4f;
+  --ok-soft: #e3f0e7;
+  --warn: #8a5b00;
+  --warn-soft: #fbeece;
+  --danger: #b42318;
+  --danger-soft: #fce9e7;
+
+  /* Garden */
+  --soil: #e7dcc3;
+  --plot-outline: #b09667;
+  --tile-base: #fffcf5;
+  --icon-halo: rgba(25, 22, 16, 0.78);
+
+  /* Buff colors, shared by the grid, the legend and the goal rows */
+  --buff-waterRetain: #2f7fe0;
+  --buff-weedBlock: #8b6b3d;
+  --buff-harvestBoost: #d4a017;
+  --buff-qualityBoost: #9b59b6;
+  --buff-growthBoost: #22a06b;
+
+  /* Radius */
+  --r-xs: 6px;
+  --r-sm: 9px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(16, 32, 20, 0.06), 0 1px 3px rgba(16, 32, 20, 0.07);
+  --shadow-2: 0 2px 6px rgba(16, 32, 20, 0.07), 0 10px 24px rgba(16, 32, 20, 0.08);
+  --shadow-drag: 0 12px 28px rgba(16, 32, 20, 0.24), 0 2px 8px rgba(16, 32, 20, 0.18);
+
+  /* Spacing */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  /* Type */
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.9375rem;
+  --fs-lg: 1.0625rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 260ms;
+
+  /* Control sizing */
+  --control-h: 38px;
+  --control-h-sm: 30px;
+
+  /* Aliases kept while components move to the new token names. They resolve
+     per theme because they point at the tokens above. */
+  --panel: var(--surface);
+  --muted: var(--text-muted);
+  --radius: var(--r-md);
+  --control-height: var(--control-h);
+  --warning-bg: var(--warn-soft);
+  --warning-text: var(--warn);
+  --error-bg: var(--danger-soft);
+  --error-text: var(--danger);
+}
+
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #10140f;
+    --bg-tint: #161c15;
+    --surface: #182017;
+    --surface-2: #1f291e;
+    --surface-3: #273226;
+    --text: #e8eee8;
+    --text-muted: #a3b2a6;
+    --text-subtle: #8b9a8e;
+    --border: #2b372a;
+    --border-strong: #3a4838;
+
+    --accent: #6fd39a;
+    --accent-hover: #86dfab;
+    --accent-press: #57bd84;
+    --accent-text: #0c1a11;
+    --accent-soft: #1c3226;
+    --accent-soft-border: #2f5740;
+    --focus-ring: rgba(111, 211, 154, 0.5);
+
+    --ok: #6fd39a;
+    --ok-soft: #1c3226;
+    --warn: #f3cf7a;
+    --warn-soft: #362b10;
+    --danger: #f5a39c;
+    --danger-soft: #3a1a18;
+
+    --soil: #38301f;
+    --plot-outline: #c2ab77;
+    --tile-base: #262b25;
+    --icon-halo: rgba(255, 255, 255, 0.72);
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.45);
+    --shadow-drag: 0 14px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #10140f;
+  --bg-tint: #161c15;
+  --surface: #182017;
+  --surface-2: #1f291e;
+  --surface-3: #273226;
+  --text: #e8eee8;
+  --text-muted: #a3b2a6;
+  --text-subtle: #8b9a8e;
+  --border: #2b372a;
+  --border-strong: #3a4838;
+
+  --accent: #6fd39a;
+  --accent-hover: #86dfab;
+  --accent-press: #57bd84;
+  --accent-text: #0c1a11;
+  --accent-soft: #1c3226;
+  --accent-soft-border: #2f5740;
+  --focus-ring: rgba(111, 211, 154, 0.5);
+
+  --ok: #6fd39a;
+  --ok-soft: #1c3226;
+  --warn: #f3cf7a;
+  --warn-soft: #362b10;
+  --danger: #f5a39c;
+  --danger-soft: #3a1a18;
+
+  --soil: #38301f;
+  --plot-outline: #c2ab77;
+  --tile-base: #262b25;
+  --icon-halo: rgba(255, 255, 255, 0.72);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.45);
+  --shadow-drag: 0 14px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.5);
+}

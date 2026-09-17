@@ -6,6 +6,13 @@
     <meta name="description" content="Plan a Palia garden from goals: crop counts, garden buffs, and plot arrangement." />
     <title>Palia Plant Planner</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>" />
+    <script>
+      // Apply the saved theme before first paint so the page doesn't flash.
+      try {
+        var t = localStorage.getItem('palia-plant-planner:theme:v1');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
