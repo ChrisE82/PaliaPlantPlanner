@@ -1,24 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { formatInt, joinWithOr, readableTextColor } from './format';
-
-describe('readableTextColor', () => {
-  it('picks white text on dark backgrounds', () => {
-    expect(readableTextColor('#000000')).toBe('#ffffff');
-    expect(readableTextColor('#1f2a24')).toBe('#ffffff');
-    expect(readableTextColor('#4a67c9')).toBe('#ffffff'); // blueberry blue
-  });
-
-  it('picks black text on light backgrounds', () => {
-    expect(readableTextColor('#ffffff')).toBe('#000000');
-    expect(readableTextColor('#eee4c4')).toBe('#000000'); // rice cream
-    expect(readableTextColor('#f3d53f')).toBe('#000000'); // corn yellow
-  });
-
-  it('accepts hex without a leading #', () => {
-    expect(readableTextColor('ffffff')).toBe('#000000');
-  });
-});
+import { formatInt, joinWithOr } from './format';
 
 describe('joinWithOr', () => {
   it('handles zero, one and two items', () => {

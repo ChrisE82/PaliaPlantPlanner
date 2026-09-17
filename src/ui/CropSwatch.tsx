@@ -1,6 +1,6 @@
+import type { CSSProperties } from 'react';
 import type { Crop } from '../engine/types';
 import { cropIcon } from './cropIcons';
-import { readableTextColor } from './format';
 
 export interface CropSwatchProps {
   crop: Crop;
@@ -14,7 +14,7 @@ export default function CropSwatch({ crop, size = 'normal' }: CropSwatchProps) {
   return (
     <span
       className={`crop-swatch${size === 'small' ? ' crop-swatch--small' : ''}`}
-      style={{ background: crop.color, color: readableTextColor(crop.color) }}
+      style={{ '--crop-color': crop.color } as CSSProperties}
     >
       {icon ? <img className="crop-swatch__icon" src={icon} alt="" /> : crop.abbr}
     </span>

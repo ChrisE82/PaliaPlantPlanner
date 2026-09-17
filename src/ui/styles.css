@@ -15,6 +15,12 @@
   --error-bg: #fde8e7;
   --error-text: #b42318;
 
+  /* Crop tiles and chips are a tint of the crop's color over this base, so
+     the crop icons stay readable (a gold wheat icon on a gold tile does not).
+     --icon-halo outlines an icon against its tile. */
+  --tile-base: #fffcf5;
+  --icon-halo: rgba(25, 22, 16, 0.78);
+
   /* Buff colors, shared with the results panel. */
   --buff-waterRetain: #3b82f6;
   --buff-weedBlock: #8b6b3d;
@@ -46,6 +52,8 @@
     --error-text: #f5a39c;
     --soil: #3a3226;
     --plot-outline: #cbb98c;
+    --tile-base: #262b25;
+    --icon-halo: rgba(255, 255, 255, 0.72);
     color-scheme: dark;
   }
 }
@@ -511,6 +519,9 @@ label {
   font-weight: 700;
   flex: 0 0 auto;
   overflow: hidden;
+  background: color-mix(in srgb, var(--crop-color) 38%, var(--tile-base));
+  border: 1px solid color-mix(in srgb, var(--crop-color) 85%, var(--tile-base));
+  color: var(--text);
 }
 
 .crop-swatch--small {
@@ -522,6 +533,7 @@ label {
   width: 82%;
   height: 82%;
   object-fit: contain;
+  filter: drop-shadow(0 0 1px var(--icon-halo));
 }
 
 .helper-chip__text {
@@ -749,15 +761,24 @@ svg :focus-visible {
   font-size: 0.34px;
   font-weight: 700;
   pointer-events: none;
+  fill: var(--text);
 }
 
 .garden-grid__name {
   font-size: 0.15px;
   pointer-events: none;
+  fill: var(--text);
+}
+
+.garden-grid__crop {
+  fill: color-mix(in srgb, var(--crop-color) 38%, var(--tile-base));
+  stroke: color-mix(in srgb, var(--crop-color) 85%, var(--tile-base));
+  stroke-width: 0.06;
 }
 
 .garden-grid__icon {
   pointer-events: none;
+  filter: drop-shadow(0 0 0.03px var(--icon-halo)) drop-shadow(0 0 0.03px var(--icon-halo));
 }
 
 .shopping-list__crop {

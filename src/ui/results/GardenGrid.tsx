@@ -3,7 +3,7 @@
  * plot outlines, placed crops with buff dots, and (in edit mode) tap targets
  * for the active tool with a hover preview for the Plant tool.
  */
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState, type CSSProperties } from 'react';
 import { RULES } from '../../engine/rules';
 import {
   BUFF_IDS,
@@ -18,7 +18,6 @@ import {
   type TilePos,
 } from '../../engine/types';
 import { cropIcon } from '../cropIcons';
-import { readableTextColor } from '../format';
 import { requestedBuffsForCrop } from './buffRequests';
 import { previewPlacement } from './edit';
 
@@ -217,7 +216,6 @@ export default function GardenGrid({
           const iconSize = crop.size === 1 ? 0.7 : crop.size * 0.55;
           const cx = p.x + crop.size / 2;
           const cy = p.y + crop.size / 2;
-          const textColor = readableTextColor(crop.color);
 
           return (
             <g
@@ -243,7 +241,7 @@ export default function GardenGrid({
                 width={crop.size}
                 height={crop.size}
                 rx={0.15}
-                style={{ fill: crop.color }}
+                style={{ '--crop-color': crop.color } as CSSProperties}
               />
               {icon ? (
                 <image
@@ -262,7 +260,6 @@ export default function GardenGrid({
                   y={showName ? cy - 0.16 : cy}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  style={{ fill: textColor }}
                 >
                   {crop.abbr}
                 </text>
@@ -274,7 +271,6 @@ export default function GardenGrid({
                   y={icon ? p.y + crop.size - 0.42 : cy + 0.22}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  style={{ fill: textColor }}
                 >
                   {crop.name}
                 </text>
