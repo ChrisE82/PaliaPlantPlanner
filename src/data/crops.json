@@ -1,0 +1,117 @@
+{
+  "checkedOn": "2026-09-17",
+  "note": "Sizes and buffs checked against the Palia wiki and two open-source planners. Growth, yield and sell numbers are stored for later features and are not used yet.",
+  "sources": [
+    { "label": "Palia Wiki: Gardening", "url": "https://palia.wiki.gg/wiki/Gardening" },
+    { "label": "Palia Wiki: Crops", "url": "https://palia.wiki.gg/wiki/Crops" },
+    { "label": "aisen's Palia Garden Planner (code)", "url": "https://github.com/VincentAmante/palia-tools" },
+    { "label": "garden-plot-optimizer (code)", "url": "https://github.com/bumblebeers/garden-plot-optimizer" }
+  ],
+  "crops": [
+    {
+      "id": "tomato", "name": "Tomato", "abbr": "To", "color": "#e0533d", "size": 1, "buff": "waterRetain",
+      "seed": { "price": 80, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 4, "regrow": { "everyDays": 2, "harvests": 4 },
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 23, "star": 34 }
+    },
+    {
+      "id": "potato", "name": "Potato", "abbr": "Po", "color": "#b98a5b", "size": 1, "buff": "waterRetain",
+      "seed": { "price": 40, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 5, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 45, "star": 67 }
+    },
+    {
+      "id": "napa-cabbage", "name": "Napa Cabbage", "abbr": "Na", "color": "#b5d98b", "size": 1, "buff": "waterRetain",
+      "seed": { "price": 20, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 6, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 40, "star": 60 }
+    },
+    {
+      "id": "rice", "name": "Rice", "abbr": "Ri", "color": "#eee4c4", "size": 1, "buff": "harvestBoost",
+      "seed": { "price": 23, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 3, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 27, "star": 40 }
+    },
+    {
+      "id": "wheat", "name": "Wheat", "abbr": "Wh", "color": "#e2b64c", "size": 1, "buff": "harvestBoost",
+      "seed": { "price": 25, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 4, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 33, "star": 49 }
+    },
+    {
+      "id": "corn", "name": "Corn", "abbr": "Cr", "color": "#f3d53f", "size": 1, "buff": "harvestBoost",
+      "seed": { "price": 30, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 5, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 40, "star": 60 }
+    },
+    {
+      "id": "carrot", "name": "Carrot", "abbr": "Ca", "color": "#f59a3c", "size": 1, "buff": "weedBlock",
+      "seed": { "price": 15, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 3, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 23, "star": 34 }
+    },
+    {
+      "id": "onion", "name": "Onion", "abbr": "On", "color": "#b8749f", "size": 1, "buff": "weedBlock",
+      "seed": { "price": 20, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 4, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 30, "star": 45 }
+    },
+    {
+      "id": "bok-choy", "name": "Bok Choy", "abbr": "Bk", "color": "#4f9d57", "size": 1, "buff": "weedBlock",
+      "seed": { "price": 30, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 3, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 30, "star": 45 }
+    },
+    {
+      "id": "cotton", "name": "Cotton", "abbr": "Ct", "color": "#dce5f0", "size": 1, "buff": "qualityBoost",
+      "seed": { "price": 40, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": null, "note": "Unlock level not confirmed" },
+      "growDays": 5, "regrow": null,
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 45, "star": 67 }
+    },
+    {
+      "id": "blueberry", "name": "Blueberry", "abbr": "Bb", "color": "#4a67c9", "size": 2, "buff": "harvestBoost",
+      "seed": { "price": null, "currency": null, "source": "Seed Collector or Gardening Guild Store" },
+      "unlock": { "gardeningLevel": 8, "note": null },
+      "growDays": 9, "regrow": { "everyDays": 3, "harvests": 4 },
+      "yield": { "base": 6, "boosted": 9 }, "sell": { "base": 39, "star": 58 }
+    },
+    {
+      "id": "batterfly-bean", "name": "Batterfly Bean", "abbr": "Be", "color": "#3aa197", "size": 2, "buff": "harvestBoost",
+      "seed": { "price": null, "currency": null, "source": "Gathered in Elderwood, or Seed Collector" },
+      "unlock": { "gardeningLevel": null, "note": "Needs Elderwood access" },
+      "growDays": 6, "regrow": { "everyDays": 2, "harvests": 4 },
+      "yield": { "base": 6, "boosted": 9 }, "sell": { "base": 23, "star": 34 }
+    },
+    {
+      "id": "spicy-pepper", "name": "Spicy Pepper", "abbr": "Pe", "color": "#a8322d", "size": 2, "buff": "qualityBoost",
+      "seed": { "price": 170, "currency": "gold", "source": "Zeki's" },
+      "unlock": { "gardeningLevel": 6, "note": null },
+      "growDays": 6, "regrow": { "everyDays": 3, "harvests": 4 },
+      "yield": { "base": 6, "boosted": 9 }, "sell": { "base": 32, "star": 48 }
+    },
+    {
+      "id": "rockhopper-pumpkin", "name": "Rockhopper Pumpkin", "abbr": "Pu", "color": "#c9651f", "size": 2, "buff": "qualityBoost",
+      "seed": { "price": 350, "currency": "gold", "source": "Daiya Crop Store; also Seed Collector" },
+      "unlock": { "gardeningLevel": null, "note": null },
+      "growDays": 9, "regrow": { "everyDays": 2, "harvests": 4 },
+      "yield": { "base": 2, "boosted": 3 }, "sell": { "base": 88, "star": 132 }
+    },
+    {
+      "id": "apple", "name": "Apple", "abbr": "Ap", "color": "#6da544", "size": 3, "buff": "harvestBoost",
+      "seed": { "price": 280, "currency": "medals", "source": "Gardening Guild Store; also Seed Collector" },
+      "unlock": { "gardeningLevel": 10, "note": null },
+      "growDays": 12, "regrow": { "everyDays": 6, "harvests": 4 },
+      "yield": { "base": 16, "boosted": 24 }, "sell": { "base": 64, "star": 96 }
+    }
+  ]
+}
