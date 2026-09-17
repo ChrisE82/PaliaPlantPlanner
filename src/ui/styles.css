@@ -816,6 +816,28 @@ label {
   border: 2px solid transparent;
 }
 
+/* Legend swatches are HTML spans, so they need background colors (the
+   garden-grid__dot--* rules above only set SVG fill and stroke). */
+.garden-grid__legend-dot.garden-grid__dot--waterRetain {
+  background: var(--buff-waterRetain);
+}
+
+.garden-grid__legend-dot.garden-grid__dot--weedBlock {
+  background: var(--buff-weedBlock);
+}
+
+.garden-grid__legend-dot.garden-grid__dot--harvestBoost {
+  background: var(--buff-harvestBoost);
+}
+
+.garden-grid__legend-dot.garden-grid__dot--qualityBoost {
+  background: var(--buff-qualityBoost);
+}
+
+.garden-grid__legend-dot.garden-grid__dot--growthBoost {
+  background: var(--buff-growthBoost);
+}
+
 .garden-grid__legend-dot.garden-grid__dot--hollow {
   border-color: var(--muted);
   background: var(--panel);
