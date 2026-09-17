@@ -159,6 +159,7 @@ export default function ArrangementEditor() {
           {customPlots.map((plot, index) => (
             <g
               key={`${plot.x}-${plot.y}`}
+              className="arrangement-editor__plot-button"
               role="button"
               tabIndex={0}
               aria-label={`Plot ${index + 1} of ${customPlots.length} placed. Press to remove it.`}

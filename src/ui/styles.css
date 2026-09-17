@@ -570,6 +570,11 @@ label {
   cursor: pointer;
 }
 
+.arrangement-editor__plot-button:focus-visible .arrangement-editor__plot {
+  stroke: var(--text);
+  stroke-dasharray: 0.5 0.25;
+}
+
 .arrangement-editor__plot-label {
   fill: var(--text);
   font-size: 1.1px;
@@ -707,9 +712,20 @@ label {
   cursor: pointer;
 }
 
-.garden-grid__placement:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+/* Browsers draw outlines on SVG elements in the SVG's own units, so the
+   viewBox scaling (about 48px per tile) turns a thin focus outline into a
+   ring hundreds of pixels wide. Outlines are turned off inside SVGs, and
+   keyboard focus is shown with a dashed stroke in tile units instead. */
+svg :focus,
+svg :focus-visible {
+  outline: none;
+}
+
+.garden-grid__placement:focus-visible .garden-grid__crop,
+.garden-grid__tile:focus-visible {
+  stroke: var(--text);
+  stroke-width: 0.1;
+  stroke-dasharray: 0.25 0.12;
 }
 
 .garden-grid__placement--selected .garden-grid__crop {
