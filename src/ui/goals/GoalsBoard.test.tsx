@@ -23,6 +23,19 @@ function renderBoard(issues: readonly PrecheckIssue[] = []) {
   );
 }
 
+describe('GoalsBoard header actions', () => {
+  it('clears all goals and restores the example', async () => {
+    const user = userEvent.setup();
+    renderBoard();
+    await user.click(screen.getByRole('button', { name: 'Clear all' }));
+    expect(useStore.getState().settings.goals).toEqual([]);
+    expect((screen.getByRole('button', { name: 'Clear all' }) as HTMLButtonElement).disabled).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Reset to example' }));
+    expect(useStore.getState().settings.goals).toHaveLength(4);
+  });
+});
+
 describe('GoalsBoard layout', () => {
   it('places the default example goals in their lanes', () => {
     renderBoard();

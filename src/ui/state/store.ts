@@ -265,6 +265,7 @@ export interface PlannerStore {
   toggleHelper: (cropId: CropId) => void;
   setHelpers: (ids: CropId[]) => void;
   resetToExample: () => void;
+  clearGoals: () => void;
   /**
    * Applies one goals-board or helpers-tray drop or tap-to-place gesture
    * (see goals/goalDrops.ts's applyDrop for the full rule set). Returns
@@ -438,6 +439,8 @@ export const useStore = create<PlannerStore>()((set, get) => {
         spaceLimit: defaultSpaceLimit(),
         ...clearedRunState(),
       })),
+
+    clearGoals: () => set((s) => ({ settings: { ...s.settings, goals: [] } })),
 
     applyGoalDrop: (item, target) => {
       const state = get();

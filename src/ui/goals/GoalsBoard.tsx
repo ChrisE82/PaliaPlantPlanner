@@ -74,6 +74,8 @@ export default function GoalsBoard({ issues }: GoalsBoardProps) {
   const goals = useStore((s) => s.settings.goals);
   const selectedItem = useStore((s) => s.selectedItem);
   const selectItem = useStore((s) => s.selectItem);
+  const resetToExample = useStore((s) => s.resetToExample);
+  const clearGoals = useStore((s) => s.clearGoals);
 
   const issuesByGoal = useMemo(() => {
     const map = new Map<string, PrecheckIssue[]>();
@@ -105,6 +107,14 @@ export default function GoalsBoard({ issues }: GoalsBoardProps) {
     <section className="card goals-board" aria-label="Goals">
       <div className="card__header">
         <h2 className="card__title">Goals</h2>
+        <div className="card__actions">
+          <button type="button" className="btn btn--ghost btn--sm" onClick={resetToExample}>
+            Reset to example
+          </button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={clearGoals} disabled={goals.length === 0}>
+            Clear all
+          </button>
+        </div>
       </div>
 
       {globalIssues.map((issue, i) => (
