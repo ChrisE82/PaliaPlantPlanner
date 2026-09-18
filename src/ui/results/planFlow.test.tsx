@@ -4,9 +4,10 @@
  * driven through the real App with a fake PlannerClient.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App';
+import { AppDndProvider } from '../dnd/AppDnd';
 import { PlannerClientProvider } from '../state/plannerClient';
 import { useStore } from '../state/store';
 import { createFakePlannerClient, type FakePlannerClient } from '../testHelpers';
@@ -16,6 +17,10 @@ let client: FakePlannerClient;
 
 beforeEach(() => {
   useStore.getState().resetToExample();
+  // resetToExample() doesn't clear the palette's tap-to-place selection
+  // (it isn't part of settings); clear it explicitly so one test's palette
+  // pick can't toggle itself off at the start of the next.
+  useStore.getState().selectItem(null);
   client = createFakePlannerClient();
 });
 
@@ -23,12 +28,26 @@ afterEach(() => {
   cleanup();
 });
 
+// App renders the shared top palette unconditionally, which reads the
+// app-wide drag context - the same wrap main.tsx gives the real app.
 function renderApp() {
   return render(
     <PlannerClientProvider client={client}>
-      <App />
+      <AppDndProvider>
+        <App />
+      </AppDndProvider>
     </PlannerClientProvider>,
   );
+}
+
+/**
+ * Selects a crop from the shared top palette (tap-to-place), by its name.
+ * Scoped to the palette region: the Helpers card also has a same-named chip
+ * for every visible crop.
+ */
+async function selectPaletteCrop(user: ReturnType<typeof userEvent.setup>, name: string) {
+  const palette = screen.getByRole('region', { name: 'Crops and buffs' });
+  await user.click(within(palette).getByRole('button', { name: new RegExp(`^${name}`) }));
 }
 
 // Two touching 3x3 plots: 6 tiles wide, 3 tall, tiles (0,0)-(5,2).
@@ -75,13 +94,17 @@ describe('plan flow', () => {
     ];
     client.resolveRun(planResult(solutions));
 
-    await screen.findByRole('tablist');
-    const tabs = screen.getAllByRole('tab');
+    // Scoped to the option tabs specifically: the result-detail tabs
+    // (Goals/Compare/Seeds) are also a tablist once results are shown.
+    const optionTablist = await screen.findByRole('tablist', { name: 'Layout options' });
+    const tabs = within(optionTablist).getAllByRole('tab');
     expect(tabs.length).toBe(2);
     expect(tabs[0].textContent).toContain('Best');
     expect(tabs[1].textContent).toContain('Option 2');
 
     expect(screen.getByText('Goal summary')).toBeTruthy();
+
+    await user.click(screen.getByRole('tab', { name: 'Seeds' }));
     expect(screen.getByText(/^Total: /)).toBeTruthy();
   });
 
@@ -115,7 +138,12 @@ describe('plan flow', () => {
     await screen.findByText('Goal summary');
 
     expect(screen.queryByText(/Your settings changed/)).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Add goal' }));
+    // Changes settings directly rather than through a particular setup
+    // control, since this test only cares that *some* settings change makes
+    // the result stale, not which control causes it.
+    act(() => {
+      useStore.getState().setGardeningLevel(3);
+    });
     expect(await screen.findByText('Your settings changed after this plan. Plan again to update it.')).toBeTruthy();
   });
 });
@@ -164,8 +192,7 @@ describe('editing', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Edit layout' }));
-    const palette = screen.getByRole('group', { name: 'Your crops' });
-    await user.click(within(palette).getByRole('button', { name: /Wheat/ }));
+    await selectPaletteCrop(user, 'Wheat');
     await user.click(screen.getByTestId('grid-tile-3-0'));
 
     expect(useStore.getState().solutionStates[0].placements).toEqual([{ cropId: 'wheat', x: 3, y: 0 }]);
@@ -177,8 +204,7 @@ describe('editing', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Edit layout' }));
-    const palette = screen.getByRole('group', { name: 'Your crops' });
-    await user.click(within(palette).getByRole('button', { name: /Apple/ }));
+    await selectPaletteCrop(user, 'Apple');
     await user.click(screen.getByTestId('grid-tile-0-0'));
 
     expect(useStore.getState().solutionStates[0].placements).toEqual([{ cropId: 'apple', x: 0, y: 0 }]);
@@ -194,8 +220,7 @@ describe('editing', () => {
     await user.click(screen.getByTestId('grid-tile-1-1')); // locks the whole apple
 
     await user.click(screen.getByRole('radio', { name: 'Plant' }));
-    const palette = screen.getByRole('group', { name: 'Your crops' });
-    await user.click(within(palette).getByRole('button', { name: /Wheat/ }));
+    await selectPaletteCrop(user, 'Wheat');
     await user.click(screen.getByTestId('grid-tile-1-1'));
 
     expect(await screen.findByText('Apple is locked. Unlock it first.')).toBeTruthy();
@@ -246,8 +271,7 @@ describe('editing', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Edit layout' }));
-    const palette = screen.getByRole('group', { name: 'Your crops' });
-    await user.click(within(palette).getByRole('button', { name: /Wheat/ }));
+    await selectPaletteCrop(user, 'Wheat');
     await user.click(screen.getByTestId('grid-tile-3-0'));
     expect(useStore.getState().solutionStates[0].placements.length).toBe(1);
 

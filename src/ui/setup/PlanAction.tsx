@@ -11,9 +11,10 @@ interface PlanActionProps {
 }
 
 /**
- * The plan button and search-time select. A normal block at the end of the
- * rail on wide screens; on phones (see setup.css's override of shell.css's
- * .action-bar--mobile) it becomes a sticky bar pinned to the bottom.
+ * The plan button and search-time segmented control (no select). A normal
+ * block at the end of the rail on wide screens; on phones (see setup.css's
+ * override of shell.css's .action-bar--mobile) it becomes a sticky bar
+ * pinned to the bottom.
  */
 export default function PlanAction({ onPlan, canPlan, isRunning, errorCount }: PlanActionProps) {
   const searchTime = useStore((s) => s.searchTime);
@@ -22,18 +23,22 @@ export default function PlanAction({ onPlan, canPlan, isRunning, errorCount }: P
   return (
     <div className="plan-action action-bar action-bar--mobile">
       <div className="plan-action__row">
-        <div className="field plan-action__search">
-          <label htmlFor="search-time" className="field-label">
-            Search time
-          </label>
-          <select id="search-time" value={searchTime} onChange={(e) => setSearchTime(e.target.value as SearchTime)}>
+        <fieldset className="field plan-action__search">
+          <legend className="field-label">Search time</legend>
+          <div className="segmented">
             {SEARCH_TIME_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
+              <label key={o.value} className="segmented__option">
+                <input
+                  type="radio"
+                  name="search-time"
+                  checked={searchTime === o.value}
+                  onChange={() => setSearchTime(o.value as SearchTime)}
+                />
+                <span className="segmented__label">{o.label}</span>
+              </label>
             ))}
-          </select>
-        </div>
+          </div>
+        </fieldset>
         <button type="button" className="btn btn--primary plan-action__button" disabled={!canPlan} onClick={onPlan}>
           {isRunning ? 'Planning...' : 'Plan my garden'}
         </button>

@@ -18,6 +18,8 @@ import {
   type PlotPos,
   type TilePos,
 } from '../../engine/types';
+import type { DragItem, DropTarget } from '../dnd/types';
+import { applyDrop, reorderGoals } from '../goals/goalDrops';
 import { eraseAt, placeCropAt, toggleLockAtTile, toggleLockPlotAt as computeLockPlotToggle } from '../results/edit';
 import { isSearchTime, type SearchTime } from '../results/planTiming';
 
@@ -76,10 +78,6 @@ export function defaultSettings(): PlanSettings {
 
 export function defaultSpaceLimit(): SpaceLimit {
   return { width: null, height: null };
-}
-
-function newGoal(): Goal {
-  return { id: makeId(), crop: 'tomato', measure: 'quantity', amount: { kind: 'count', n: 10 }, importance: 'medium' };
 }
 
 // ---------------------------------------------------------------------------
@@ -200,37 +198,6 @@ function applyGoalPatch(goal: Goal, patch: Partial<Goal>): Goal {
   return next;
 }
 
-/**
- * Moves the goal `id` into `importance`'s lane at position `index` (0-based,
- * counting only that lane's other goals). `settings.goals` stays a single
- * array whose order is the display order: a lane is simply the goals with
- * that importance, in array order (see the Goals board in GoalBoard.tsx).
- * Used for both drag-and-drop reordering and the keyboard/pointer paths
- * dnd-kit drives through the same events.
- */
-function reorderGoals(goals: readonly Goal[], id: string, importance: Importance, index: number): Goal[] {
-  const current = goals.find((g) => g.id === id);
-  if (!current) return goals.slice();
-
-  const moved: Goal = current.importance === importance ? current : { ...current, importance };
-  const without = goals.filter((g) => g.id !== id);
-
-  // Positions, within `without`, of the goals already in the target lane.
-  const laneIndices: number[] = [];
-  without.forEach((g, i) => {
-    if (g.importance === importance) laneIndices.push(i);
-  });
-
-  const clampedIndex = Math.max(0, Math.min(index, laneIndices.length));
-  // Inserting before the goal currently at that lane slot reproduces the
-  // requested position; past the last lane slot, append to the whole array.
-  const insertAt = clampedIndex < laneIndices.length ? laneIndices[clampedIndex] : without.length;
-
-  const next = without.slice();
-  next.splice(insertAt, 0, moved);
-  return next;
-}
-
 // ---------------------------------------------------------------------------
 // Run state: a plan in progress or its result, and per-solution edits
 // ---------------------------------------------------------------------------
@@ -291,15 +258,20 @@ export interface PlannerStore {
   setSpaceLimit: (width: number | null, height: number | null) => void;
   setCustomPlots: (plots: PlotPos[]) => void;
   setGardeningLevel: (level: number | null) => void;
-  addGoal: () => void;
   updateGoal: (id: string, patch: Partial<Goal>) => void;
   removeGoal: (id: string) => void;
-  /** Moves a goal to `importance`'s lane at display position `index` (see reorderGoals). */
+  /** Moves a goal to `importance`'s lane at display position `index` (see reorderGoals in goals/goalDrops.ts). */
   reorderGoal: (id: string, importance: Importance, index: number) => void;
   toggleHelper: (cropId: CropId) => void;
   setHelpers: (ids: CropId[]) => void;
   resetToExample: () => void;
-  clearGoals: () => void;
+  /**
+   * Applies one goals-board or helpers-tray drop or tap-to-place gesture
+   * (see goals/goalDrops.ts's applyDrop for the full rule set). Returns
+   * whether it was handled, so a useDropHandler can fall through to another
+   * area's handler when it wasn't (e.g. a garden tile target).
+   */
+  applyGoalDrop: (item: DragItem, target: DropTarget | null) => boolean;
 
   // -- Run state (project task spec, Task A/B) --------------------------
 
@@ -332,6 +304,13 @@ export interface PlannerStore {
 
   placeCrop: (cropId: CropId, x: number, y: number) => { ok: boolean; message: string | null };
   eraseCrop: (x: number, y: number) => { ok: boolean; message: string | null };
+  /** Moves the plant covering `from` so its top-left is `to`, as one undo step. */
+  moveCrop: (from: TilePos, to: TilePos) => { ok: boolean; message: string | null };
+
+  // -- Palette selection (tap a palette item, then tap where it goes) ------
+
+  selectedItem: DragItem | null;
+  selectItem: (item: DragItem | null) => void;
   toggleLockPlantAt: (x: number, y: number) => void;
   toggleLockPlotAt: (x: number, y: number) => void;
   unlockAllForSelected: () => void;
@@ -418,11 +397,6 @@ export const useStore = create<PlannerStore>()((set, get) => {
         settings: { ...state.settings, gardeningLevel: level === null ? null : Math.max(1, Math.round(level)) },
       })),
 
-    addGoal: () =>
-      set((state) => ({
-        settings: { ...state.settings, goals: [...state.settings.goals, newGoal()] },
-      })),
-
     updateGoal: (id, patch) =>
       set((state) => ({
         settings: {
@@ -465,10 +439,13 @@ export const useStore = create<PlannerStore>()((set, get) => {
         ...clearedRunState(),
       })),
 
-    clearGoals: () =>
-      set((state) => ({
-        settings: { ...state.settings, goals: [] },
-      })),
+    applyGoalDrop: (item, target) => {
+      const state = get();
+      const result = applyDrop({ goals: state.settings.goals, helpers: state.settings.helpers }, item, target);
+      if (!result) return false;
+      set((s) => ({ settings: { ...s.settings, goals: result.goals, helpers: result.helpers } }));
+      return true;
+    },
 
     // -- Run state ----------------------------------------------------
 
@@ -552,6 +529,36 @@ export const useStore = create<PlannerStore>()((set, get) => {
       }
       return { ok: outcome.changed, message: outcome.message };
     },
+
+    moveCrop: (from, to) => {
+      const s = get();
+      const solution = s.result?.solutions[s.selectedIndex];
+      const editState = s.solutionStates[s.selectedIndex];
+      if (!solution || !editState) return { ok: false, message: null };
+
+      const garden = buildGarden(solution.plots);
+      const moving = editState.placements.find((p) => {
+        const size = CROP_BY_ID.get(p.cropId)?.size ?? 1;
+        return from.x >= p.x && from.x < p.x + size && from.y >= p.y && from.y < p.y + size;
+      });
+      if (!moving) return { ok: false, message: null };
+
+      const erased = eraseAt(garden, CROP_BY_ID, editState.placements, editState.lockedTiles, from.x, from.y);
+      if (!erased.changed) return { ok: false, message: erased.message };
+      const placed = placeCropAt(garden, CROP_BY_ID, erased.placements, editState.lockedTiles, moving.cropId, to.x, to.y);
+      if (!placed.changed) return { ok: false, message: placed.message };
+
+      const index = s.selectedIndex;
+      set((st) => ({
+        solutionStates: st.solutionStates.map((es, i) =>
+          i === index ? { placements: placed.placements, lockedTiles: es.lockedTiles, history: withHistory(es) } : es,
+        ),
+      }));
+      return { ok: true, message: null };
+    },
+
+    selectedItem: null,
+    selectItem: (item) => set({ selectedItem: item }),
 
     toggleLockPlantAt: (x, y) =>
       set((s) => {

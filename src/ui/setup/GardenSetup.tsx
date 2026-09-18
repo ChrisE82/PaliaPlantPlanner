@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { CROPS } from '../../data/crops';
 import { precheck } from '../../engine/precheck';
+import GoalsBoard from '../goals/GoalsBoard';
+import HelpersTray from '../goals/HelpersTray';
 import { useStore } from '../state/store';
-import GardenCard from './GardenCard';
-import GoalBoard from './GoalBoard';
-import HelperPicker from './HelperPicker';
+import GardenSettings from './GardenSettings';
 import PlanAction from './PlanAction';
 
 export interface GardenSetupProps {
@@ -13,9 +13,10 @@ export interface GardenSetupProps {
 }
 
 /**
- * The rail: the Garden, Goals and Helpers cards, then the plan action (see
- * PLAN.md sections 4 and 6). Each card owns its own layout; this component
- * just computes the shared precheck once and wires up the plan button.
+ * The setup side: the Goals board, Helpers tray, Garden settings, then the
+ * plan action (see PLAN.md sections 4 and 6, and the task spec's Goals
+ * board / Garden settings). Computes the shared precheck once and wires up
+ * the plan button; each piece owns its own layout and drag-and-drop.
  */
 export default function GardenSetup({ onPlan }: GardenSetupProps) {
   const settings = useStore((s) => s.settings);
@@ -28,9 +29,9 @@ export default function GardenSetup({ onPlan }: GardenSetupProps) {
 
   return (
     <>
-      <GardenCard />
-      <GoalBoard issues={issues} />
-      <HelperPicker />
+      <GoalsBoard issues={issues} />
+      <HelpersTray />
+      <GardenSettings />
       <PlanAction onPlan={onPlan} canPlan={canPlan} isRunning={isRunning} errorCount={errorCount} />
     </>
   );

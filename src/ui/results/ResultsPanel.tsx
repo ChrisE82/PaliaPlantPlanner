@@ -1,21 +1,14 @@
 /**
  * The results panel: planner progress, the selected solution evaluated live
  * against the current settings, and edit mode (project task spec, Task A
- * step 5, Task B) — including drag and drop, layered over the same store
- * actions and edit.ts rules that click-to-place and the keyboard paths use.
+ * step 5, Task B) - including drag and drop, over the same store actions
+ * and edit.ts rules that click-to-place and the keyboard paths use. Drag and
+ * drop is plugged into the one app-wide drag context (src/ui/dnd/AppDnd.tsx)
+ * shared with the palette and the goals board, rather than a context of its
+ * own: see decideGardenDrop in dragDrop.ts for what a drop onto the garden
+ * means.
  */
-import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
-  useDndContext,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type ScreenReaderInstructions,
-} from '@dnd-kit/core';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CROPS, CROP_BY_ID } from '../../data/crops';
 import { computeBuffs, describeBuffs } from '../../engine/buffs';
 import { explainGoals } from '../../engine/explain';
@@ -24,48 +17,26 @@ import { goalCropIds, goalLabel } from '../../engine/goals';
 import { precheck } from '../../engine/precheck';
 import { layoutStats, makeScoreContext } from '../../engine/score';
 import { shoppingList } from '../../engine/shopping';
-import type { CropId, Goal, TilePos } from '../../engine/types';
+import type { Goal } from '../../engine/types';
+import { useDropHandler } from '../dnd/AppDnd';
+import type { DragItem, DropTarget } from '../dnd/types';
 import { CheckIcon, PencilIcon } from '../icons';
-import CropSwatch from '../CropSwatch';
 import { isStaleResult, useStore } from '../state/store';
 import { goalsInvolvingCrop } from './buffRequests';
 import CompareTable, { type CompareOption } from './CompareTable';
-import CropPalette from './CropPalette';
-import { createDragAnnouncements, gridCollisionDetection, tileKeyboardCoordinateGetter } from './dndConfig';
-import { planDrop, type DragItemData } from './dragDrop';
+import { decideGardenDrop } from './dragDrop';
 import EditToolbar from './EditToolbar';
 import GardenGrid, { type EditTool } from './GardenGrid';
 import GoalSummary from './GoalSummary';
 import OptionTabs from './OptionTabs';
 import PlantDetails from './PlantDetails';
 import ProgressView from './ProgressView';
+import ResultTabs, { type ResultTab } from './ResultTabs';
 import ShoppingList from './ShoppingList';
 
 export interface ResultsPanelProps {
   onStop: () => void;
   onReoptimize: () => void;
-}
-
-// Stable across the component's lifetime (CROP_BY_ID is static data), so
-// these live at module scope rather than being recreated, or memoized,
-// every render.
-const dragAnnouncements = createDragAnnouncements(CROP_BY_ID);
-const dragInstructions: ScreenReaderInstructions = {
-  draggable:
-    'To pick this up, press space or enter. Use the arrow keys to move it over the garden, space or enter to drop it, or escape to cancel.',
-};
-
-/** The crop icon following the pointer/keyboard focus while dragging; reads the active drag from context. */
-function DragOverlayGhost() {
-  const { active } = useDndContext();
-  const data = active?.data.current as DragItemData | undefined;
-  const crop = data ? CROP_BY_ID.get(data.cropId) : undefined;
-  if (!crop) return null;
-  return (
-    <div className="garden-grid__drag-ghost">
-      <CropSwatch crop={crop} />
-    </div>
-  );
 }
 
 export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps) {
@@ -83,31 +54,66 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
   const selectSolution = useStore((s) => s.selectSolution);
   const placeCrop = useStore((s) => s.placeCrop);
   const eraseCrop = useStore((s) => s.eraseCrop);
+  const moveCrop = useStore((s) => s.moveCrop);
   const toggleLockPlantAt = useStore((s) => s.toggleLockPlantAt);
   const toggleLockPlotAt = useStore((s) => s.toggleLockPlotAt);
   const unlockAllForSelected = useStore((s) => s.unlockAllForSelected);
   const undoEdit = useStore((s) => s.undoEdit);
   const setCustomPlots = useStore((s) => s.setCustomPlots);
   const setArrangementMode = useStore((s) => s.setArrangementMode);
+  const selectedItem = useStore((s) => s.selectedItem);
 
   const [editMode, setEditMode] = useState(false);
   const [tool, setTool] = useState<EditTool>('plant');
-  const [selectedCropId, setSelectedCropId] = useState<CropId | null>(null);
   const [selectedPlacementIndex, setSelectedPlacementIndex] = useState<number | null>(null);
   const [toolMessage, setToolMessage] = useState<string | null>(null);
+  const [resultTab, setResultTab] = useState<ResultTab>('goals');
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: tileKeyboardCoordinateGetter }),
-  );
+  const selectedPaletteCropId = selectedItem?.kind === 'palette-crop' ? selectedItem.cropId : null;
 
-  const idx = result ? Math.min(selectedIndex, result.solutions.length - 1) : 0;
-  const currentPlacements = result ? solutionStates[idx]?.placements : undefined;
+  // Registered once; always calls the latest closure (see useDropHandler),
+  // so it's fine that this reads settings-derived locals defined below the
+  // early returns further down - garden/placements are recomputed fresh
+  // from the store here rather than reused, since a hook can't follow an
+  // early return.
+  useDropHandler((item: DragItem, target: DropTarget | null): boolean => {
+    if (!result || result.solutions.length === 0) return false;
+    const i = Math.min(selectedIndex, result.solutions.length - 1);
+    const solution = result.solutions[i];
+    const editState = solutionStates[i] ?? { placements: solution.placements, lockedTiles: [], history: [] };
+    const garden = buildGarden(solution.plots);
+    const decision = decideGardenDrop(garden, CROP_BY_ID, editState.placements, editState.lockedTiles, item, target);
 
-  // A tab switch or any edit invalidates a previously selected placement index.
-  useEffect(() => {
-    setSelectedPlacementIndex(null);
-  }, [idx, currentPlacements]);
+    switch (decision.action) {
+      case 'not-garden':
+        return false;
+      case 'noop':
+        setToolMessage(null);
+        return true;
+      case 'refused':
+        setToolMessage(decision.message);
+        return true;
+      case 'place': {
+        if (!editMode) {
+          setEditMode(true);
+          setTool('plant');
+        }
+        const outcome = placeCrop(decision.cropId, decision.x, decision.y);
+        setToolMessage(outcome.ok ? null : outcome.message);
+        return true;
+      }
+      case 'move': {
+        const outcome = moveCrop(decision.from, decision.to);
+        setToolMessage(outcome.ok ? null : outcome.message);
+        return true;
+      }
+      case 'erase': {
+        const outcome = eraseCrop(decision.x, decision.y);
+        setToolMessage(outcome.ok ? null : outcome.message);
+        return true;
+      }
+    }
+  });
 
   if (status === 'idle') {
     return (
@@ -141,6 +147,7 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
     );
   }
 
+  const idx = Math.min(selectedIndex, result.solutions.length - 1);
   const solution = result.solutions[idx];
   const editState = solutionStates[idx] ?? { placements: solution.placements, lockedTiles: [], history: [] };
   const placements = editState.placements;
@@ -189,14 +196,14 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
     };
   });
 
+  const showCompare = result.solutions.length > 1;
+  const effectiveResultTab: ResultTab = resultTab === 'compare' && !showCompare ? 'goals' : resultTab;
+
   function handleTileActivate(x: number, y: number) {
     setToolMessage(null);
     if (tool === 'plant') {
-      if (!selectedCropId) {
-        setToolMessage('Choose a crop to plant first.');
-        return;
-      }
-      const outcome = placeCrop(selectedCropId, x, y);
+      if (!selectedPaletteCropId) return; // the hint below the toolbar already says to pick one
+      const outcome = placeCrop(selectedPaletteCropId, x, y);
       if (!outcome.ok && outcome.message) setToolMessage(outcome.message);
     } else if (tool === 'erase') {
       const outcome = eraseCrop(x, y);
@@ -205,46 +212,6 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
       toggleLockPlantAt(x, y);
     } else {
       toggleLockPlotAt(x, y);
-    }
-  }
-
-  /**
-   * Carries out a drop (a palette chip placing a crop, or a plant being
-   * moved) using the same rules as the click/keyboard paths. A move is not
-   * a single store action (see the setup agent note in the task report), so
-   * it's an erase of the old tiles followed by a place at the new ones;
-   * planDrop already validated the whole thing first, so the place step is
-   * only expected to fail if something changed underneath it, in which case
-   * the erase is undone rather than leaving the plant missing.
-   */
-  function handleDragEnd(event: DragEndEvent) {
-    const overData = event.over?.data.current as TilePos | undefined;
-    if (!overData) return;
-    const itemData = event.active.data.current as DragItemData | undefined;
-    if (!itemData) return;
-
-    const plan = planDrop(garden, CROP_BY_ID, placements, editState.lockedTiles, itemData, overData);
-    if (plan.action === 'none') {
-      setToolMessage(plan.message);
-      return;
-    }
-    setToolMessage(null);
-
-    if (plan.action === 'place') {
-      const outcome = placeCrop(plan.cropId, plan.x, plan.y);
-      if (!outcome.ok && outcome.message) setToolMessage(outcome.message);
-      return;
-    }
-
-    const erased = eraseCrop(plan.from.x, plan.from.y);
-    if (!erased.ok) {
-      if (erased.message) setToolMessage(erased.message);
-      return;
-    }
-    const placed = placeCrop(plan.cropId, plan.to.x, plan.to.y);
-    if (!placed.ok) {
-      undoEdit();
-      if (placed.message) setToolMessage(placed.message);
     }
   }
 
@@ -261,41 +228,34 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
   }
 
   return (
-    <DndContext
-      id="garden-dnd"
-      sensors={sensors}
-      collisionDetection={gridCollisionDetection}
-      onDragStart={() => setToolMessage(null)}
-      onDragEnd={handleDragEnd}
-      accessibility={{ announcements: dragAnnouncements, screenReaderInstructions: dragInstructions }}
-    >
-      <section className="panel results-panel" aria-label="Results">
-        {stale && <p className="issue issue--warning">Your settings changed after this plan. Plan again to update it.</p>}
-        {status === 'stopped' && <p className="muted">Stopped early. This is the best layout found so far.</p>}
+    <section className="panel results-panel" aria-label="Results">
+      {stale && <p className="issue issue--warning">Your settings changed after this plan. Plan again to update it.</p>}
+      {status === 'stopped' && <p className="muted">Stopped early. This is the best layout found so far.</p>}
 
-        <div className="results-toolbar">
-          <OptionTabs solutions={result.solutions} editedFlags={editedFlags} selectedIndex={idx} onSelect={selectSolution} />
-          <div className="results-toolbar__actions">
-            <button type="button" className={editMode ? 'primary' : ''} aria-pressed={editMode} onClick={handleToggleEditMode}>
-              {editMode ? <CheckIcon aria-hidden="true" /> : <PencilIcon aria-hidden="true" />}
-              {editMode ? 'Done editing' : 'Edit layout'}
-            </button>
-            <button type="button" onClick={handleUseArrangement}>
-              Use this arrangement
-            </button>
-          </div>
+      <div className="results-toolbar">
+        <OptionTabs solutions={result.solutions} editedFlags={editedFlags} selectedIndex={idx} onSelect={selectSolution} />
+        <div className="results-toolbar__actions">
+          <button type="button" className={editMode ? 'primary' : ''} aria-pressed={editMode} onClick={handleToggleEditMode}>
+            {editMode ? <CheckIcon aria-hidden="true" /> : <PencilIcon aria-hidden="true" />}
+            {editMode ? 'Done editing' : 'Edit layout'}
+          </button>
+          <button type="button" onClick={handleUseArrangement}>
+            Use this arrangement
+          </button>
         </div>
+      </div>
 
-        <div className="results-status">
-          <span className={`badge ${mustStatusBadge}`}>{mustStatusText}</span>
-        </div>
+      <div className="results-status">
+        <span className={`badge ${mustStatusBadge}`}>{mustStatusText}</span>
+      </div>
 
-        {mustUnmet.map((r) => (
-          <p key={r.goalId} className="issue issue--error" role="alert">
-            {`Must goal not met: ${r.label}.${r.reason ? ` ${r.reason}` : ''}`}
-          </p>
-        ))}
+      {mustUnmet.map((r) => (
+        <p key={r.goalId} className="issue issue--error" role="alert">
+          {`Must goal not met: ${r.label}.${r.reason ? ` ${r.reason}` : ''}`}
+        </p>
+      ))}
 
+      <div className="results-grid-row">
         <GardenGrid
           garden={garden}
           placements={placements}
@@ -308,47 +268,10 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
           onSelectPlacement={editMode ? undefined : (i) => setSelectedPlacementIndex(i)}
           interactive={
             editMode
-              ? { tool, previewCropId: tool === 'plant' ? selectedCropId : null, onTileActivate: handleTileActivate }
+              ? { tool, previewCropId: tool === 'plant' ? selectedPaletteCropId : null, onTileActivate: handleTileActivate }
               : undefined
           }
         />
-
-        {editMode && (
-          <>
-            <EditToolbar
-              tool={tool}
-              onToolChange={(t) => {
-                setTool(t);
-                setToolMessage(null);
-              }}
-              onUndo={undoEdit}
-              canUndo={editState.history.length > 0}
-              onUnlockAll={unlockAllForSelected}
-              canUnlockAll={editState.lockedTiles.length > 0}
-              onReoptimize={onReoptimize}
-              reoptimizing={reoptimizing}
-            />
-            {tool === 'plant' && (
-              <CropPalette
-                gardeningLevel={settings.gardeningLevel}
-                goalCrops={goalCrops}
-                helpers={settings.helpers}
-                selectedCropId={selectedCropId}
-                onSelect={setSelectedCropId}
-              />
-            )}
-            {toolMessage && (
-              <p className="issue issue--error" role="alert">
-                {toolMessage}
-              </p>
-            )}
-            {reoptimizeError && (
-              <p className="issue issue--error" role="alert">
-                {reoptimizeError}
-              </p>
-            )}
-          </>
-        )}
 
         {!editMode && selectedCrop && selectedPlacement && (
           <PlantDetails
@@ -360,20 +283,47 @@ export default function ResultsPanel({ onStop, onReoptimize }: ResultsPanelProps
             goalsForCrop={selectedGoals}
           />
         )}
+      </div>
 
-        <GoalSummary reports={goalReports} goalsById={goalsById} />
+      {editMode && (
+        <>
+          <EditToolbar
+            tool={tool}
+            onToolChange={(t) => {
+              setTool(t);
+              setToolMessage(null);
+            }}
+            onUndo={undoEdit}
+            canUndo={editState.history.length > 0}
+            onUnlockAll={unlockAllForSelected}
+            canUnlockAll={editState.lockedTiles.length > 0}
+            onReoptimize={onReoptimize}
+            reoptimizing={reoptimizing}
+          />
+          {tool === 'plant' && !selectedPaletteCropId && (
+            <p className="muted">Pick a crop from the palette above, then tap or drag it onto the garden.</p>
+          )}
+          {toolMessage && (
+            <p className="issue issue--error" role="alert">
+              {toolMessage}
+            </p>
+          )}
+          {reoptimizeError && (
+            <p className="issue issue--error" role="alert">
+              {reoptimizeError}
+            </p>
+          )}
+        </>
+      )}
 
-        <CompareTable goals={settings.goals} goalLabels={goalLabelsById} options={compareOptions} />
-
-        <ShoppingList list={shopping} />
-      </section>
-
-      {/* No drop-animation: DragOverlayGhost reads the active drag reactively, so it
-          disappears the instant the drop is committed rather than animating an
-          overlay that no longer has anything to show. */}
-      <DragOverlay dropAnimation={null}>
-        <DragOverlayGhost />
-      </DragOverlay>
-    </DndContext>
+      <ResultTabs tab={effectiveResultTab} onChange={setResultTab} showCompare={showCompare} />
+      <div role="tabpanel" id={`result-tabpanel-${effectiveResultTab}`} aria-labelledby={`result-tab-${effectiveResultTab}`}>
+        {effectiveResultTab === 'goals' && <GoalSummary reports={goalReports} goalsById={goalsById} />}
+        {effectiveResultTab === 'compare' && (
+          <CompareTable goals={settings.goals} goalLabels={goalLabelsById} options={compareOptions} />
+        )}
+        {effectiveResultTab === 'seeds' && <ShoppingList list={shopping} />}
+      </div>
+    </section>
   );
 }

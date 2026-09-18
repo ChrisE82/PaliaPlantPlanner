@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import App from './App';
+import { AppDndProvider } from './dnd/AppDnd';
 import { useStore } from './state/store';
 import { PlannerClientProvider } from './state/plannerClient';
 import { createFakePlannerClient } from './testHelpers';
@@ -18,7 +19,9 @@ afterEach(() => {
 function renderApp() {
   return render(
     <PlannerClientProvider client={createFakePlannerClient()}>
-      <App />
+      <AppDndProvider>
+        <App />
+      </AppDndProvider>
     </PlannerClientProvider>,
   );
 }

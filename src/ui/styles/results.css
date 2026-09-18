@@ -351,17 +351,6 @@
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
-/* The floating icon that follows the pointer/keyboard focus in DragOverlay. */
-.garden-grid__drag-ghost {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  box-shadow: var(--shadow-drag);
-  cursor: grabbing;
-}
-
 .garden-grid__legend {
   list-style: none;
   margin: var(--s-3) 0 0;
@@ -382,6 +371,27 @@
 .garden-grid__legend .garden-grid__dot {
   width: 9px;
   height: 9px;
+}
+
+/* -------------------------------------------------------------------------
+   The grid and, when a plant is selected in view mode, its details card
+   next to it (stacked below at narrower widths).
+   ------------------------------------------------------------------------- */
+
+.results-grid-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-4);
+}
+
+.results-grid-row > .garden-grid__wrap {
+  flex: 1 1 320px;
+}
+
+.results-grid-row > .plant-details {
+  flex: 1 1 260px;
+  max-width: 100%;
 }
 
 /* -------------------------------------------------------------------------
@@ -466,7 +476,7 @@
 }
 
 /* -------------------------------------------------------------------------
-   Edit toolbar and crop palette
+   Edit toolbar
    ------------------------------------------------------------------------- */
 
 .edit-toolbar {
@@ -482,20 +492,33 @@
   gap: var(--s-2);
 }
 
-.crop-palette fieldset {
-  margin: 0 0 var(--s-3);
+/* -------------------------------------------------------------------------
+   Result tabs: Goals / Compare / Seeds under the grid, same segmented look
+   as the edit toolbar's tool switcher (see .segmented in controls.css) but
+   a plain tablist rather than a radio group, so it's keyed off aria-selected.
+   ------------------------------------------------------------------------- */
+
+.result-tabs__tab {
+  min-height: calc(var(--control-h) - 8px);
+  padding: 0 0.9em;
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--r-md) - 4px);
 }
 
-.crop-palette fieldset:last-child {
-  margin-bottom: 0;
+.result-tabs__tab:hover:not(:disabled) {
+  color: var(--text);
+  background: transparent;
+  border: 0;
 }
 
-.crop-palette__chip {
-  touch-action: none;
-}
-
-.crop-palette__chip--dragging {
-  opacity: 0.4;
+.result-tabs__tab--selected {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
 }
 
 /* -------------------------------------------------------------------------

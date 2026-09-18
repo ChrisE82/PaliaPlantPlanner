@@ -2,17 +2,27 @@
  * The result grid (project task spec, Task A step 5 and Task B): soil tiles,
  * plot outlines, placed crops with buff dots, and (in edit mode) tap targets
  * for the active tool with a hover preview for the Plant tool, plus drag and
- * drop for placing and moving crops.
+ * drop - shared with the rest of the app via src/ui/dnd - for placing and
+ * moving crops, and pointer-paint for the Plant/Erase tools.
  *
  * An HTML CSS grid, one cell per tile: a `GardenTile` per soil tile (always
- * present, so it keeps its `data-testid` and can be a drop target; only an
- * empty tile gets the button role) and a `GardenPlacement` per plant,
- * spanning its footprint with `grid-column`/`grid-row`. Plot outlines and
- * the drag-preview ghost are drawn as a separate absolutely-positioned
- * overlay so a crop crossing a plot border still looks continuous.
+ * present, so it keeps its `data-testid` and is always a drop target for a
+ * palette crop, even outside edit mode; only an empty tile gets the button
+ * role) and a `GardenPlacement` per plant, spanning its footprint with
+ * `grid-column`/`grid-row`. Plot outlines and the drag-preview ghost are
+ * drawn as a separate absolutely-positioned overlay so a crop crossing a
+ * plot border still looks continuous.
+ *
+ * Painting: with the Plant tool and a crop selected, or with the Erase tool,
+ * pressing down on a tile and moving across others acts on each tile the
+ * pointer enters, like a paint tool. A plant's own move-drag (the grip
+ * handle) is a separate dnd-kit activator, so it never competes with this -
+ * the tile body's own pointerdown either starts a paint stroke or, when
+ * painting isn't active for the current tool, starts a dnd-kit drag of the
+ * plant there; never both.
  */
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { RULES } from '../../engine/rules';
 import {
   BUFF_IDS,
@@ -27,9 +37,11 @@ import {
   type TilePos,
 } from '../../engine/types';
 import { cropIcon } from '../cropIcons';
+import { useActiveDragItem } from '../dnd/AppDnd';
+import { dragId, dropId, type DndData, type DropTarget } from '../dnd/types';
 import { GripIcon, LockIcon } from '../icons';
 import { requestedBuffsForCrop } from './buffRequests';
-import { dragGhostFor, type DragGhost, type DragItemData } from './dragDrop';
+import { dragGhostFor, type DragGhost } from './dragDrop';
 import { previewPlacement } from './edit';
 
 export type EditTool = 'plant' | 'erase' | 'lockPlant' | 'lockPlot';
@@ -95,6 +107,12 @@ function footprintBoxStyle(x: number, y: number, size: number, garden: Garden): 
   };
 }
 
+/** Whether the Plant (with a crop chosen) or Erase tool is active, so a press-and-move paints tiles. */
+function isPaintEligible(interactive: GardenGridInteractive | undefined): boolean {
+  if (!interactive) return false;
+  return interactive.tool === 'erase' || (interactive.tool === 'plant' && interactive.previewCropId !== null);
+}
+
 // ---------------------------------------------------------------------------
 // One soil tile: always present (drop target, data-testid), a keyboard
 // button only when empty and interactive.
@@ -106,12 +124,25 @@ interface GardenTileProps {
   empty: boolean;
   lockedEmpty: boolean;
   interactive?: GardenGridInteractive;
-  dragEnabled: boolean;
+  paintEligible: boolean;
   onHover: (t: TilePos | null) => void;
+  onPaintStart: (x: number, y: number) => void;
+  onPaintEnter: (x: number, y: number) => void;
 }
 
-function GardenTile({ x, y, empty, lockedEmpty, interactive, dragEnabled, onHover }: GardenTileProps) {
-  const { setNodeRef } = useDroppable({ id: `tile-${x}-${y}`, data: { x, y }, disabled: !dragEnabled });
+function GardenTile({
+  x,
+  y,
+  empty,
+  lockedEmpty,
+  interactive,
+  paintEligible,
+  onHover,
+  onPaintStart,
+  onPaintEnter,
+}: GardenTileProps) {
+  const target: DropTarget = { kind: 'tile', x, y };
+  const { setNodeRef } = useDroppable({ id: dropId(target), data: { target } });
 
   return (
     <div
@@ -122,8 +153,16 @@ function GardenTile({ x, y, empty, lockedEmpty, interactive, dragEnabled, onHove
       role={interactive && empty ? 'button' : undefined}
       tabIndex={interactive && empty ? 0 : undefined}
       aria-label={interactive && empty ? `Empty tile, column ${x + 1}, row ${y + 1}.` : undefined}
-      onMouseEnter={() => interactive && onHover({ x, y })}
-      onClick={() => interactive?.onTileActivate(x, y)}
+      onMouseEnter={() => {
+        if (interactive) onHover({ x, y });
+        onPaintEnter(x, y);
+      }}
+      onPointerDown={() => {
+        if (paintEligible) onPaintStart(x, y);
+      }}
+      onClick={() => {
+        if (!paintEligible) interactive?.onTileActivate(x, y);
+      }}
       onKeyDown={(e) => {
         if (!interactive || !empty) return;
         if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -136,7 +175,8 @@ function GardenTile({ x, y, empty, lockedEmpty, interactive, dragEnabled, onHove
 
 // ---------------------------------------------------------------------------
 // One placed crop: spans its footprint, draggable to move it via a grip
-// handle (pointer dragging also works from anywhere on the tile itself).
+// handle (pointer dragging also works from the tile body itself, except
+// while a paint stroke is eligible - see the module doc comment).
 // ---------------------------------------------------------------------------
 
 interface GardenPlacementProps {
@@ -149,7 +189,10 @@ interface GardenPlacementProps {
   selected: boolean;
   interactive?: GardenGridInteractive;
   dragEnabled: boolean;
+  paintEligible: boolean;
   onHover: (t: TilePos | null) => void;
+  onPaintStart: (x: number, y: number) => void;
+  onPaintEnter: (x: number, y: number) => void;
   onSelectPlacement?: (index: number) => void;
 }
 
@@ -163,13 +206,16 @@ function GardenPlacement({
   selected,
   interactive,
   dragEnabled,
+  paintEligible,
   onHover,
+  onPaintStart,
+  onPaintEnter,
   onSelectPlacement,
 }: GardenPlacementProps) {
-  const dragData: DragItemData = { kind: 'plant', index, cropId: p.cropId, x: p.x, y: p.y };
+  const item = { kind: 'plant' as const, index, cropId: p.cropId, x: p.x, y: p.y };
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useDraggable({
-    id: `plant-${index}`,
-    data: dragData,
+    id: dragId(item),
+    data: { item },
     disabled: !dragEnabled,
   });
 
@@ -206,9 +252,20 @@ function GardenPlacement({
           '--icon-pct': iconPct,
         } as CSSProperties
       }
-      onMouseEnter={() => onHover({ x: p.x, y: p.y })}
-      onClick={activate}
-      onPointerDown={(e) => dragEnabled && listeners?.onPointerDown?.(e)}
+      onMouseEnter={() => {
+        onHover({ x: p.x, y: p.y });
+        onPaintEnter(p.x, p.y);
+      }}
+      onClick={() => {
+        if (!paintEligible) activate();
+      }}
+      onPointerDown={(e) => {
+        if (paintEligible) {
+          onPaintStart(p.x, p.y);
+        } else if (dragEnabled) {
+          listeners?.onPointerDown?.(e);
+        }
+      }}
       onKeyDown={(e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         e.preventDefault();
@@ -246,10 +303,11 @@ function GardenPlacement({
           {...attributes}
           {...listeners}
           onPointerDown={(e) => {
-            // The tile itself also wires up listeners.onPointerDown (so the
-            // whole card is draggable by pointer, not just this handle); stop
-            // this one from bubbling to it, or the same pointerdown would
-            // reach dnd-kit's activator twice for the one drag.
+            // The handle is the one dnd-kit move-drag activator while a
+            // paint stroke is eligible for the tile body (see the module
+            // doc comment); it always starts a move otherwise too. Stop
+            // this from bubbling to the tile body's own onPointerDown so
+            // the same pointerdown isn't handled twice.
             e.stopPropagation();
             listeners?.onPointerDown?.(e);
           }}
@@ -286,19 +344,42 @@ export default function GardenGrid({
 }: GardenGridProps) {
   const [hover, setHover] = useState<TilePos | null>(null);
   const dragEnabled = !!interactive;
+  const paintEligible = isPaintEligible(interactive);
 
-  // Reads the ambient DndContext (a no-op default outside one, e.g. in
-  // ProgressView's read-only grid) so a live drag anywhere in edit mode
-  // — a palette chip or an existing plant — previews its drop footprint
-  // here, without ResultsPanel having to thread that state down as a prop.
-  const { active, over } = useDndContext();
+  // Tracks a paint stroke across renders without needing one, and survives
+  // the pointer being released outside the grid entirely.
+  const paintingRef = useRef(false);
+  useEffect(() => {
+    function stopPainting() {
+      paintingRef.current = false;
+    }
+    window.addEventListener('pointerup', stopPainting);
+    return () => window.removeEventListener('pointerup', stopPainting);
+  }, []);
+
+  function handlePaintStart(x: number, y: number) {
+    if (!paintEligible || !interactive) return;
+    paintingRef.current = true;
+    interactive.onTileActivate(x, y);
+  }
+
+  function handlePaintEnter(x: number, y: number) {
+    if (!paintEligible || !interactive || !paintingRef.current) return;
+    interactive.onTileActivate(x, y);
+  }
+
+  // Reads the shared app-wide drag (a palette chip or an existing plant, see
+  // src/ui/dnd/AppDnd.tsx) so a live drag anywhere - not just in edit mode,
+  // so dragging a crop onto the garden from the top palette just works -
+  // previews its drop footprint here, without the caller threading that
+  // state down as a prop.
+  const activeItem = useActiveDragItem();
+  const { over } = useDndContext();
   const liveDragGhost = useMemo(() => {
-    if (!dragEnabled) return null;
-    const activeData = active?.data.current as DragItemData | undefined;
-    const overData = over?.data.current as TilePos | undefined;
-    if (!activeData || !overData) return null;
-    return dragGhostFor(garden, cropsById, placements, lockedTiles, activeData, overData);
-  }, [dragEnabled, active, over, garden, cropsById, placements, lockedTiles]);
+    if (!activeItem) return null;
+    const target = (over?.data.current as DndData | undefined)?.target ?? null;
+    return dragGhostFor(garden, cropsById, placements, lockedTiles, activeItem, target);
+  }, [activeItem, over, garden, cropsById, placements, lockedTiles]);
 
   const occByTile = useMemo(() => {
     const occ = new Int16Array(garden.width * garden.height).fill(-1);
@@ -368,8 +449,10 @@ export default function GardenGrid({
               empty={empty}
               lockedEmpty={empty && lockedSet.has(tileKey(x, y))}
               interactive={interactive}
-              dragEnabled={dragEnabled}
+              paintEligible={paintEligible}
               onHover={setHover}
+              onPaintStart={handlePaintStart}
+              onPaintEnter={handlePaintEnter}
             />
           );
         })}
@@ -401,7 +484,10 @@ export default function GardenGrid({
               selected={selectedIndex === i}
               interactive={interactive}
               dragEnabled={dragEnabled}
+              paintEligible={paintEligible}
               onHover={setHover}
+              onPaintStart={handlePaintStart}
+              onPaintEnter={handlePaintEnter}
               onSelectPlacement={onSelectPlacement}
             />
           );

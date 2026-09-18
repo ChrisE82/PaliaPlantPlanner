@@ -1,16 +1,24 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
 import { CROP_BY_ID } from '../../data/crops';
 import { computeBuffs } from '../../engine/buffs';
 import { buildGarden } from '../../engine/garden';
 import { ALL_GOAL_CROPS, type Goal, type Placement } from '../../engine/types';
+import { AppDndProvider } from '../dnd/AppDnd';
 import GardenGrid from './GardenGrid';
 
 afterEach(() => {
   cleanup();
 });
+
+// GardenGrid reads the shared app-wide drag context (useActiveDragItem), so
+// every render needs the same provider main.tsx wraps the app with.
+function renderGrid(ui: ReactElement) {
+  return render(<AppDndProvider>{ui}</AppDndProvider>);
+}
 
 // Two touching plots: apple (3x3) on the left, three wheat plants (1x1,
 // harvestBoost) along apple's right edge.
@@ -31,7 +39,7 @@ function buildFixture(goals: Goal[], goalCrops: Set<string>) {
 describe('GardenGrid crop icons', () => {
   it('draws one icon per plant when icons are available', () => {
     const { garden, buffs } = buildFixture([], new Set());
-    const { container } = render(
+    const { container } = renderGrid(
       <GardenGrid
         garden={garden}
         placements={PLACEMENTS}
@@ -59,7 +67,7 @@ describe('GardenGrid aria labels', () => {
     const goals: Goal[] = [{ id: 'g1', crop: 'apple', measure: 'waterRetain', amount: { kind: 'all' }, importance: 'high' }];
     const { garden, buffs } = buildFixture(goals, new Set(['apple']));
 
-    render(
+    renderGrid(
       <GardenGrid
         garden={garden}
         placements={PLACEMENTS}
@@ -84,7 +92,7 @@ describe('GardenGrid aria labels', () => {
     const garden = buildGarden([{ x: 0, y: 0 }]);
     const placements: Placement[] = [{ cropId: 'wheat', x: 0, y: 0 }];
     const buffs = computeBuffs(garden, placements, CROP_BY_ID);
-    render(
+    renderGrid(
       <GardenGrid
         garden={garden}
         placements={placements}
@@ -103,7 +111,7 @@ describe('GardenGrid hollow-dot rule', () => {
   it('draws a solid dot for a received buff and a hollow dot for a requested-but-missing one', () => {
     const goals: Goal[] = [{ id: 'g1', crop: 'apple', measure: 'waterRetain', amount: { kind: 'all' }, importance: 'high' }];
     const { garden, buffs } = buildFixture(goals, new Set(['apple']));
-    const { container } = render(
+    const { container } = renderGrid(
       <GardenGrid
         garden={garden}
         placements={PLACEMENTS}
@@ -135,7 +143,7 @@ describe('GardenGrid hollow-dot rule', () => {
     const goals: Goal[] = [{ id: 'g1', crop: ALL_GOAL_CROPS, measure: 'waterRetain', amount: { kind: 'all' }, importance: 'low' }];
     // apple is a goal crop (named elsewhere); wheat here is only a helper.
     const { garden, buffs } = buildFixture(goals, new Set(['apple']));
-    const { container } = render(
+    const { container } = renderGrid(
       <GardenGrid
         garden={garden}
         placements={PLACEMENTS}
@@ -155,7 +163,7 @@ describe('GardenGrid hollow-dot rule', () => {
 
   it('shows no dots at all when nothing is received or requested', () => {
     const { garden } = buildFixture([], new Set());
-    const { container } = render(
+    const { container } = renderGrid(
       <GardenGrid
         garden={garden}
         placements={[{ cropId: 'wheat', x: 3, y: 0 }]}
@@ -176,7 +184,7 @@ describe('GardenGrid interaction', () => {
     const user = userEvent.setup();
     const { garden, buffs } = buildFixture([], new Set());
     const onSelect = vi.fn();
-    render(
+    renderGrid(
       <GardenGrid
         garden={garden}
         placements={PLACEMENTS}
@@ -197,7 +205,7 @@ describe('GardenGrid interaction', () => {
     const { garden, buffs } = buildFixture([], new Set());
     const onSelect = vi.fn();
     const onTileActivate = vi.fn();
-    render(
+    renderGrid(
       <GardenGrid
         garden={garden}
         placements={PLACEMENTS}
@@ -217,7 +225,7 @@ describe('GardenGrid interaction', () => {
 
   it('exposes empty tiles as keyboard-activatable buttons only in edit mode', () => {
     const { garden, buffs } = buildFixture([], new Set());
-    const { rerender } = render(
+    const { rerender } = renderGrid(
       <GardenGrid
         garden={garden}
         placements={PLACEMENTS}
@@ -232,16 +240,18 @@ describe('GardenGrid interaction', () => {
     expect(screen.queryByTestId('grid-tile-4-0')?.getAttribute('role')).toBeNull();
 
     rerender(
-      <GardenGrid
-        garden={garden}
-        placements={PLACEMENTS}
-        cropsById={CROP_BY_ID}
-        buffs={buffs}
-        goals={[]}
-        goalCrops={new Set()}
-        lockedTiles={[]}
-        interactive={{ tool: 'plant', previewCropId: null, onTileActivate: () => {} }}
-      />,
+      <AppDndProvider>
+        <GardenGrid
+          garden={garden}
+          placements={PLACEMENTS}
+          cropsById={CROP_BY_ID}
+          buffs={buffs}
+          goals={[]}
+          goalCrops={new Set()}
+          lockedTiles={[]}
+          interactive={{ tool: 'plant', previewCropId: null, onTileActivate: () => {} }}
+        />
+      </AppDndProvider>,
     );
     expect(screen.getByTestId('grid-tile-4-0').getAttribute('role')).toBe('button');
   });
@@ -250,7 +260,7 @@ describe('GardenGrid interaction', () => {
 describe('GardenGrid locks', () => {
   it('marks a fully-locked plant and draws a hatch pattern over a locked empty tile', () => {
     const { garden, buffs } = buildFixture([], new Set());
-    const { container } = render(
+    const { container } = renderGrid(
       <GardenGrid
         garden={garden}
         placements={PLACEMENTS}
@@ -263,5 +273,148 @@ describe('GardenGrid locks', () => {
     );
     expect(container.querySelector('.garden-grid__lock-mark')).toBeTruthy();
     expect(container.querySelector('.garden-grid__tile--locked')).toBeTruthy();
+  });
+});
+
+describe('GardenGrid painting', () => {
+  it('acts on the pressed tile and on each further tile the pointer enters, with the Plant tool and a crop selected', () => {
+    const { garden, buffs } = buildFixture([], new Set());
+    const onTileActivate = vi.fn();
+    renderGrid(
+      <GardenGrid
+        garden={garden}
+        placements={PLACEMENTS}
+        cropsById={CROP_BY_ID}
+        buffs={buffs}
+        goals={[]}
+        goalCrops={new Set()}
+        lockedTiles={[]}
+        interactive={{ tool: 'plant', previewCropId: 'wheat', onTileActivate }}
+      />,
+    );
+    // (4, 0) and (5, 0) are both empty soil in this layout.
+    fireEvent.pointerDown(screen.getByTestId('grid-tile-4-0'));
+    fireEvent.mouseEnter(screen.getByTestId('grid-tile-5-0'));
+    expect(onTileActivate.mock.calls).toEqual([[4, 0], [5, 0]]);
+  });
+
+  it('paints with the Erase tool, including starting from an occupied tile', () => {
+    const { garden, buffs } = buildFixture([], new Set());
+    const onTileActivate = vi.fn();
+    renderGrid(
+      <GardenGrid
+        garden={garden}
+        placements={PLACEMENTS}
+        cropsById={CROP_BY_ID}
+        buffs={buffs}
+        goals={[]}
+        goalCrops={new Set()}
+        lockedTiles={[]}
+        interactive={{ tool: 'erase', previewCropId: null, onTileActivate }}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('grid-tile-3-0')); // the wheat tile
+    fireEvent.mouseEnter(screen.getByTestId('grid-tile-4-0'));
+    expect(onTileActivate.mock.calls).toEqual([[3, 0], [4, 0]]);
+  });
+
+  it('paints from the plant card itself, not just the tile underneath it', () => {
+    const { garden, buffs } = buildFixture([], new Set());
+    const onTileActivate = vi.fn();
+    renderGrid(
+      <GardenGrid
+        garden={garden}
+        placements={PLACEMENTS}
+        cropsById={CROP_BY_ID}
+        buffs={buffs}
+        goals={[]}
+        goalCrops={new Set()}
+        lockedTiles={[]}
+        interactive={{ tool: 'erase', previewCropId: null, onTileActivate }}
+      />,
+    );
+    const wheatCards = screen.getAllByRole('button', { name: /^Wheat/ });
+    fireEvent.pointerDown(wheatCards[0]); // (3, 0)
+    expect(onTileActivate).toHaveBeenCalledWith(3, 0);
+  });
+
+  it('does not paint just by hovering, without the pointer going down first', () => {
+    const { garden, buffs } = buildFixture([], new Set());
+    const onTileActivate = vi.fn();
+    renderGrid(
+      <GardenGrid
+        garden={garden}
+        placements={PLACEMENTS}
+        cropsById={CROP_BY_ID}
+        buffs={buffs}
+        goals={[]}
+        goalCrops={new Set()}
+        lockedTiles={[]}
+        interactive={{ tool: 'plant', previewCropId: 'wheat', onTileActivate }}
+      />,
+    );
+    fireEvent.mouseEnter(screen.getByTestId('grid-tile-4-0'));
+    expect(onTileActivate).not.toHaveBeenCalled();
+  });
+
+  it('stops painting once the pointer is released, even outside the grid', () => {
+    const { garden, buffs } = buildFixture([], new Set());
+    const onTileActivate = vi.fn();
+    renderGrid(
+      <GardenGrid
+        garden={garden}
+        placements={PLACEMENTS}
+        cropsById={CROP_BY_ID}
+        buffs={buffs}
+        goals={[]}
+        goalCrops={new Set()}
+        lockedTiles={[]}
+        interactive={{ tool: 'plant', previewCropId: 'wheat', onTileActivate }}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('grid-tile-4-0'));
+    fireEvent.pointerUp(window);
+    fireEvent.mouseEnter(screen.getByTestId('grid-tile-5-0'));
+    expect(onTileActivate.mock.calls).toEqual([[4, 0]]);
+  });
+
+  it('does not paint with the Plant tool when no crop is selected', () => {
+    const { garden, buffs } = buildFixture([], new Set());
+    const onTileActivate = vi.fn();
+    renderGrid(
+      <GardenGrid
+        garden={garden}
+        placements={PLACEMENTS}
+        cropsById={CROP_BY_ID}
+        buffs={buffs}
+        goals={[]}
+        goalCrops={new Set()}
+        lockedTiles={[]}
+        interactive={{ tool: 'plant', previewCropId: null, onTileActivate }}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('grid-tile-4-0'));
+    fireEvent.mouseEnter(screen.getByTestId('grid-tile-5-0'));
+    expect(onTileActivate).not.toHaveBeenCalled();
+  });
+
+  it('does not paint with the Lock plant or Lock plot tools', () => {
+    const { garden, buffs } = buildFixture([], new Set());
+    const onTileActivate = vi.fn();
+    renderGrid(
+      <GardenGrid
+        garden={garden}
+        placements={PLACEMENTS}
+        cropsById={CROP_BY_ID}
+        buffs={buffs}
+        goals={[]}
+        goalCrops={new Set()}
+        lockedTiles={[]}
+        interactive={{ tool: 'lockPlant', previewCropId: null, onTileActivate }}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('grid-tile-4-0'));
+    fireEvent.mouseEnter(screen.getByTestId('grid-tile-5-0'));
+    expect(onTileActivate).not.toHaveBeenCalled();
   });
 });

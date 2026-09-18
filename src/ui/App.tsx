@@ -1,5 +1,6 @@
 import { CROP_DATA } from '../data/crops';
 import { SproutIcon } from './icons';
+import Palette from './palette/Palette';
 import ResultsPanel from './results/ResultsPanel';
 import { useRunPlanner } from './results/useRunPlanner';
 import GardenSetup from './setup/GardenSetup';
@@ -31,6 +32,10 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      <div className="app-palette">
+        <Palette />
+      </div>
 
       <main className="app-main">
         <div className="rail">

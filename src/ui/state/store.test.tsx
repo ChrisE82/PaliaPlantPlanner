@@ -80,21 +80,6 @@ describe('plot count and arrangement mode', () => {
 });
 
 describe('goal editing', () => {
-  it('adds a goal defaulting to Tomato, Quantity, at least 10, Medium', async () => {
-    const { useStore } = await freshStore();
-    const before = useStore.getState().settings.goals.length;
-    useStore.getState().addGoal();
-    const goals = useStore.getState().settings.goals;
-    expect(goals.length).toBe(before + 1);
-    const added = goals[goals.length - 1];
-    expect([added.crop, added.measure, added.amount, added.importance]).toEqual([
-      'tomato',
-      'quantity',
-      { kind: 'count', n: 10 },
-      'medium',
-    ]);
-  });
-
   it('updates a goal field in place', async () => {
     const { useStore } = await freshStore();
     const id = useStore.getState().settings.goals[0].id;
@@ -142,9 +127,9 @@ describe('goal editing', () => {
     it('reorders within the same lane without touching other lanes', async () => {
       const { useStore } = await freshStore();
       // Give the High lane two goals so within-lane order is meaningful.
-      useStore.getState().addGoal();
+      useStore.getState().applyGoalDrop({ kind: 'palette-crop', cropId: 'onion' }, { kind: 'lane', importance: 'high' });
       const added = useStore.getState().settings.goals.at(-1)!;
-      useStore.getState().updateGoal(added.id, { measure: 'harvestBoost', amount: { kind: 'all' }, importance: 'high' });
+      useStore.getState().updateGoal(added.id, { measure: 'harvestBoost', amount: { kind: 'all' } });
 
       const beforeIds = useStore.getState().settings.goals.map((g) => g.id);
       const highLaneBefore = useStore.getState().settings.goals.filter((g) => g.importance === 'high').map((g) => g.id);
@@ -180,7 +165,7 @@ describe('goal editing', () => {
 
   it('changing measure from quantity to a buff turns Maximize into All plants', async () => {
     const { useStore } = await freshStore();
-    useStore.getState().addGoal();
+    useStore.getState().applyGoalDrop({ kind: 'palette-crop', cropId: 'onion' }, { kind: 'lane', importance: 'medium' });
     const goal = useStore.getState().settings.goals.at(-1)!;
     useStore.getState().updateGoal(goal.id, { amount: { kind: 'max' } });
     useStore.getState().updateGoal(goal.id, { measure: 'waterRetain' });
@@ -207,15 +192,9 @@ describe('goal editing', () => {
     expect(updated.amount).toEqual({ kind: 'count', n: 2 });
   });
 
-  it('clears all goals', async () => {
-    const { useStore } = await freshStore();
-    useStore.getState().clearGoals();
-    expect(useStore.getState().settings.goals).toEqual([]);
-  });
-
   it('resetToExample restores the default settings after changes', async () => {
     const { useStore, defaultSettings } = await freshStore();
-    useStore.getState().clearGoals();
+    useStore.getState().removeGoal(useStore.getState().settings.goals[0].id);
     useStore.getState().setPlotCount(3);
     useStore.getState().resetToExample();
     const s = useStore.getState().settings;
@@ -225,6 +204,34 @@ describe('goal editing', () => {
       def.goals.map((g) => [g.crop, g.measure, g.amount, g.importance]),
     );
     expect(s.helpers).toEqual(def.helpers);
+  });
+});
+
+describe('applyGoalDrop', () => {
+  it('applies a handled rule to settings.goals and returns true', async () => {
+    const { useStore } = await freshStore();
+    const before = useStore.getState().settings.goals.length;
+    const handled = useStore.getState().applyGoalDrop({ kind: 'palette-crop', cropId: 'onion' }, { kind: 'lane', importance: 'high' });
+    expect(handled).toBe(true);
+    const goals = useStore.getState().settings.goals;
+    expect(goals.length).toBe(before + 1);
+    const added = goals.at(-1)!;
+    expect([added.crop, added.measure, added.amount, added.importance]).toEqual(['onion', 'quantity', { kind: 'count', n: 1 }, 'high']);
+  });
+
+  it('applies a handled rule to settings.helpers too', async () => {
+    const { useStore } = await freshStore();
+    const handled = useStore.getState().applyGoalDrop({ kind: 'palette-crop', cropId: 'onion' }, { kind: 'helpers' });
+    expect(handled).toBe(true);
+    expect(useStore.getState().settings.helpers).toContain('onion');
+  });
+
+  it('returns false and leaves settings untouched for an unhandled item/target pair', async () => {
+    const { useStore } = await freshStore();
+    const before = useStore.getState().settings;
+    const handled = useStore.getState().applyGoalDrop({ kind: 'plant', index: 0, cropId: 'apple', x: 0, y: 0 }, { kind: 'tile', x: 0, y: 0 });
+    expect(handled).toBe(false);
+    expect(useStore.getState().settings).toBe(before);
   });
 });
 

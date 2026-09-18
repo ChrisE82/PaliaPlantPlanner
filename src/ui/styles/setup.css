@@ -1,56 +1,406 @@
-/* Setup rail: the Garden, Goals and Helpers cards, and the plan action.
-   Tokens and shared control styles live in tokens.css / controls.css; this
-   file only lays out the setup-specific pieces. */
+/* Setup side: the goals board, helpers tray, garden settings and the plan
+   action. Tokens and shared control styles live in tokens.css / controls.css
+   (owned by the design system); this file lays out the setup-specific
+   pieces built from CropTileFace / BuffBadgeFace, plus the token popover,
+   the plot picker, and the collapsed Options sliders. */
 
 /* -------------------------------------------------------------------------
-   Garden card
+   Goals board
    ------------------------------------------------------------------------- */
 
-.garden-card__top {
+.goals-board__lanes {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--s-4);
+  flex-direction: column;
+  gap: var(--s-3);
 }
 
-.garden-card__top > .field {
-  flex: 1 1 auto;
-  min-width: 9em;
+.goal-lane {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: var(--s-3);
+  transition:
+    background var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
 }
 
-/* -------------------------------------------------------------------------
-   Plots stepper
-   ------------------------------------------------------------------------- */
-
-.stepper {
-  display: inline-flex;
+.goal-lane__header {
+  display: flex;
   align-items: center;
   gap: var(--s-2);
 }
 
-.stepper__value {
-  min-width: 1.4em;
-  text-align: center;
-  font-size: var(--fs-xl);
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-}
-
-.stepper__label {
+.goal-lane__title {
   font-size: var(--fs-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
-.garden-card__plot-count {
+.goal-lane__desc {
+  margin: 2px 0 var(--s-3);
+  font-size: var(--fs-xs);
+  color: var(--text-subtle);
+}
+
+.goal-lane__tokens {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-3) var(--s-2);
+}
+
+.goal-lane__empty {
+  margin: var(--s-2) 0 0;
+  padding: var(--s-3);
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--text-subtle);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
+}
+
+/* An "Add here" tap-target, shown in every lane and the helpers tray while
+   store.selectedItem is set - the keyboard/no-drag path for every drop rule. */
+.tap-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 0 var(--s-3);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 2px dashed var(--accent-soft-border);
+  border-radius: var(--r-md);
+}
+
+/* -------------------------------------------------------------------------
+   Goal token
+   ------------------------------------------------------------------------- */
+
+.goal-token {
+  position: relative;
+  display: inline-flex;
+}
+
+.goal-token__face-btn {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.goal-token__face-btn:hover:not(:disabled) {
+  background: transparent;
+  border: 0;
+}
+
+/* A little larger than the palette's default tile: fewer, more important
+   tokens get the extra room for their corner badges. */
+.goal-token__face-btn .crop-tile {
+  --tile: 64px;
+}
+
+.goal-token__handle {
+  position: absolute;
+  left: -6px;
+  bottom: -6px;
+  color: var(--text-subtle);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+.goal-token__amount {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-1);
+  white-space: nowrap;
+}
+
+.goal-token__buff-req {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Positioned by the .goal-token__buff-req wrapper instead, when the amount pill rides along with a buff badge. */
+.goal-token__buff-req .goal-token__amount {
+  position: static;
+}
+
+.goal-token__flag {
+  position: absolute;
+  left: -5px;
+  bottom: -5px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  background: var(--surface);
+  border: 2px solid var(--surface);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-1);
+}
+
+.goal-token__flag--warning {
+  color: var(--warn);
+}
+
+.goal-token__flag--error {
+  color: var(--danger);
+}
+
+/* "All goal crops" buff token: a round tile, sized to match the crop-tile tokens beside it. */
+.goal-token__all-crops {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 64px;
+  height: 64px;
+  padding: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--dur-1) var(--ease),
+    box-shadow var(--dur-1) var(--ease);
+}
+
+.goal-token__all-crops .buff-badge {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+}
+
+.goal-token__all-crops .buff-badge__icon {
+  width: 100%;
+  height: 100%;
+  font-size: 15px;
+}
+
+.goal-token__all-crops-label {
+  font-size: 9px;
+  font-weight: 650;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.15;
+}
+
+/* -------------------------------------------------------------------------
+   Goal popover
+   ------------------------------------------------------------------------- */
+
+.goal-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  width: 260px;
+  max-width: calc(100vw - 2 * var(--s-4));
+  padding: var(--s-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+}
+
+.goal-popover__label {
+  font-weight: 650;
+  font-size: var(--fs-md);
+}
+
+.goal-popover__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.goal-popover__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.goal-popover__chip {
+  min-height: 30px;
+  padding: 0 0.65em;
+  font-size: var(--fs-xs);
+}
+
+.goal-popover__stepper {
+  align-self: flex-start;
+}
+
+.goal-popover__remove {
+  align-self: flex-start;
+}
+
+/* -------------------------------------------------------------------------
+   Helpers tray
+   ------------------------------------------------------------------------- */
+
+.helpers-tray__hint {
+  margin: 0 0 var(--s-3);
+}
+
+.helpers-tray__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-3) var(--s-2);
+  min-height: 52px;
+  padding: var(--s-2);
+  border-radius: var(--r-md);
+  transition: background var(--dur-2) var(--ease);
+}
+
+.helpers-tray__empty {
+  align-self: center;
+  font-size: var(--fs-sm);
+  color: var(--text-subtle);
+}
+
+.helpers-tray__item {
+  position: relative;
+  display: inline-flex;
+}
+
+.helpers-tray__tile {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: grab;
+  touch-action: none;
+}
+
+.helpers-tray__tile:hover:not(:disabled) {
+  background: transparent;
+  border: 0;
+}
+
+.helpers-tray__tile:active {
+  cursor: grabbing;
+}
+
+.helpers-tray__remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  min-height: 20px;
+  padding: 0;
+  color: var(--text-subtle);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-1);
+}
+
+.helpers-tray__remove svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* -------------------------------------------------------------------------
+   Plot picker
+   ------------------------------------------------------------------------- */
+
+.plot-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.plot-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  width: 108px;
+}
+
+.plot-picker__cell {
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+.plot-picker__cell:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.plot-picker__cell[aria-pressed='true'] {
+  border-color: var(--accent-soft-border);
+}
+
+.plot-picker__mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  background: transparent;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.plot-picker__cell[aria-pressed='true'] .plot-picker__mark {
+  background: var(--accent);
+}
+
+.plot-picker__value {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------------------
+   Garden settings
+   ------------------------------------------------------------------------- */
+
+.garden-settings__plot-count {
   display: flex;
   align-items: baseline;
   gap: var(--s-1);
 }
 
 /* -------------------------------------------------------------------------
-   Space limit disclosure
+   Garden options (collapsed by default)
    ------------------------------------------------------------------------- */
 
-.garden-card__space-limit summary {
+.garden-options summary {
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-muted);
@@ -58,11 +408,11 @@
   list-style: none;
 }
 
-.garden-card__space-limit summary::-webkit-details-marker {
+.garden-options summary::-webkit-details-marker {
   display: none;
 }
 
-.garden-card__space-limit summary::before {
+.garden-options summary::before {
   content: '\25B8';
   display: inline-block;
   width: 1em;
@@ -70,31 +420,47 @@
   transition: transform var(--dur-1) var(--ease);
 }
 
-.garden-card__space-limit[open] summary::before {
+.garden-options[open] summary::before {
   transform: rotate(90deg);
 }
 
-.garden-card__space-limit summary:focus-visible {
+.garden-options summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--r-xs);
 }
 
-.garden-card__space-limit .field {
+.garden-options__body {
   margin-top: var(--s-3);
 }
 
-.garden-card__space-limit input[type='number'] {
-  width: 4.5em;
-  flex: 0 0 auto;
+.range-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
 }
 
-.garden-card__unit {
+.range-field__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.range-field__value {
   font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.range-field input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
 }
 
 /* -------------------------------------------------------------------------
-   Arrangement editor
+   Arrangement editor (kept from the previous design; see ArrangementEditor.tsx)
    ------------------------------------------------------------------------- */
 
 .arrangement-editor {
@@ -194,183 +560,6 @@
 }
 
 /* -------------------------------------------------------------------------
-   Goals board
-   ------------------------------------------------------------------------- */
-
-.goal-board__lanes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-}
-
-.goal-lane {
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  padding: var(--s-2) var(--s-3) var(--s-3);
-  transition:
-    background var(--dur-2) var(--ease),
-    border-color var(--dur-2) var(--ease);
-}
-
-.goal-lane__header {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-1) 0;
-}
-
-.goal-lane__title {
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-}
-
-.goal-lane__empty {
-  margin: 0;
-  padding: var(--s-3);
-  text-align: center;
-  font-size: var(--fs-sm);
-  color: var(--text-subtle);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--r-sm);
-}
-
-.goal-lane__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-}
-
-/* -------------------------------------------------------------------------
-   Goal card
-   ------------------------------------------------------------------------- */
-
-.goal-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: var(--s-2);
-  box-shadow: var(--shadow-1);
-  transition:
-    opacity var(--dur-2) var(--ease),
-    box-shadow var(--dur-2) var(--ease);
-}
-
-.goal-card__top {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-
-.goal-card__handle {
-  color: var(--text-subtle);
-  cursor: grab;
-  flex: 0 0 auto;
-}
-
-.goal-card__handle:active {
-  cursor: grabbing;
-}
-
-.goal-card__crop {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.goal-card__all-crops {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5em;
-  height: 1.5em;
-  flex: 0 0 auto;
-  color: var(--text-subtle);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-}
-
-.goal-card__crop-select {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.goal-card__remove {
-  flex: 0 0 auto;
-}
-
-/* Measure's options ("Harvest Boost", "Quality Boost", ...) run longer than
-   Importance's ("Must", "High", ...), so it gets the bigger share of the row. */
-.goal-card__measure {
-  flex: 3 1 9em;
-  min-width: 8em;
-}
-
-/* In the top row beside the crop, so Measure and Amount share the second row. */
-.goal-card__importance {
-  flex: 0 0 auto;
-  width: 6.4em;
-}
-
-.goal-card__amount {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  flex: 2 1 10em;
-  min-width: 9em;
-}
-
-.goal-card__amount select {
-  flex: 1 1 auto;
-  min-width: 6.5em;
-}
-
-.goal-card__amount input[type='number'] {
-  width: 4.5em;
-  flex: 0 0 auto;
-}
-
-/* -------------------------------------------------------------------------
-   Helper picker
-   ------------------------------------------------------------------------- */
-
-.helper-picker__intro {
-  margin: 0 0 var(--s-3);
-}
-
-.helper-picker__wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-}
-
-.helper-chip {
-  text-align: left;
-}
-
-.helper-chip__text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.helper-chip__buff {
-  margin-top: 0.1em;
-}
-
-/* -------------------------------------------------------------------------
    Plan action
    ------------------------------------------------------------------------- */
 
@@ -388,8 +577,8 @@
 }
 
 .plan-action__search {
-  flex: 0 1 10em;
-  min-width: 8em;
+  flex: 1 1 16em;
+  min-width: 14em;
 }
 
 .plan-action__button {

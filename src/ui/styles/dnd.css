@@ -8,20 +8,87 @@
    Goals board
    ------------------------------------------------------------------------- */
 
-/* The source card, in place, while its DragOverlay clone follows the pointer. */
-.goal-card--dragging {
+/* The source token, in place, while its DragOverlay clone follows the pointer. */
+.goal-token--dragging {
   opacity: 0.4;
 }
 
-/* The DragOverlay clone: the card "lifted" off the board. */
-.goal-card--overlay {
-  cursor: grabbing;
+/* The small keyboard/pointer drag handle: quiet until it's needed. */
+.goal-token__handle {
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.goal-token:hover .goal-token__handle,
+.goal-token__handle:focus-visible {
+  opacity: 1;
+}
+
+.goal-token__all-crops.is-lifted {
+  transform: scale(1.06) rotate(-2deg);
   box-shadow: var(--shadow-drag);
 }
 
 .goal-lane--over {
   background: var(--accent-soft);
   border-color: var(--accent-soft-border);
+}
+
+/* New tokens (and the tap-to-place buttons below) pop in. */
+.goal-token,
+.tap-target {
+  animation: goal-token-in var(--dur-2) var(--ease);
+}
+
+@keyframes goal-token-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+.tap-target {
+  transition:
+    background var(--dur-1) var(--ease),
+    box-shadow var(--dur-1) var(--ease);
+}
+
+.tap-target:hover {
+  background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
+  box-shadow: var(--shadow-1);
+}
+
+.goal-popover {
+  animation: goal-popover-in var(--dur-1) var(--ease);
+}
+
+@keyframes goal-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Helpers tray
+   ------------------------------------------------------------------------- */
+
+.helpers-tray__tile.is-dragging {
+  opacity: 0.35;
+}
+
+.helpers-tray__list--over {
+  background: var(--accent-soft);
+}
+
+.helpers-tray__remove {
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.helpers-tray__item:hover .helpers-tray__remove,
+.helpers-tray__remove:focus-visible {
+  opacity: 1;
 }
 
 /* -------------------------------------------------------------------------
