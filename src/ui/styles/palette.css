@@ -1,0 +1,414 @@
+/* -------------------------------------------------------------------------
+   Crop palette, crop tiles and buff badges.
+   ------------------------------------------------------------------------- */
+
+/* ---- Buff colors as reusable classes ----------------------------------- */
+
+.buff-dot--waterRetain {
+  --buff: var(--buff-waterRetain);
+}
+
+.buff-dot--weedBlock {
+  --buff: var(--buff-weedBlock);
+}
+
+.buff-dot--harvestBoost {
+  --buff: var(--buff-harvestBoost);
+}
+
+.buff-dot--qualityBoost {
+  --buff: var(--buff-qualityBoost);
+}
+
+.buff-dot--growthBoost {
+  --buff: var(--buff-growthBoost);
+}
+
+/* ---- Crop tile --------------------------------------------------------- */
+
+.crop-tile {
+  --tile: 56px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--tile);
+  height: var(--tile);
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--crop-color) 30%, var(--tile-base));
+  border: 1px solid color-mix(in srgb, var(--crop-color) 70%, var(--tile-base));
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--dur-1) var(--ease),
+    box-shadow var(--dur-1) var(--ease),
+    opacity var(--dur-1) var(--ease);
+}
+
+.crop-tile--sm {
+  --tile: 44px;
+  border-radius: var(--r-sm);
+}
+
+.crop-tile__icon {
+  width: 74%;
+  height: 74%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 1px var(--icon-halo));
+  pointer-events: none;
+  user-select: none;
+}
+
+.crop-tile__abbr {
+  font-weight: 700;
+  font-size: var(--fs-sm);
+}
+
+.crop-tile__buff {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  color: #fff;
+  background: var(--buff);
+  border: 2px solid var(--surface);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-1);
+}
+
+.crop-tile--sm .crop-tile__buff {
+  width: 17px;
+  height: 17px;
+  font-size: 9px;
+}
+
+.crop-tile__size {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border-radius: var(--r-xs);
+}
+
+.crop-tile.is-selected {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+
+.crop-tile.is-dimmed {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
+.crop-tile.is-lifted {
+  transform: scale(1.08) rotate(-3deg);
+  box-shadow: var(--shadow-drag);
+  cursor: grabbing;
+}
+
+/* ---- Buff badge -------------------------------------------------------- */
+
+.buff-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  background: color-mix(in srgb, var(--buff) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--buff) 40%, var(--surface));
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  transition:
+    transform var(--dur-1) var(--ease),
+    box-shadow var(--dur-1) var(--ease);
+}
+
+.buff-badge--waterRetain {
+  --buff: var(--buff-waterRetain);
+}
+
+.buff-badge--weedBlock {
+  --buff: var(--buff-weedBlock);
+}
+
+.buff-badge--harvestBoost {
+  --buff: var(--buff-harvestBoost);
+}
+
+.buff-badge--qualityBoost {
+  --buff: var(--buff-qualityBoost);
+}
+
+.buff-badge--growthBoost {
+  --buff: var(--buff-growthBoost);
+}
+
+.buff-badge__icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  color: #fff;
+  background: var(--buff);
+  border-radius: var(--r-pill);
+}
+
+.buff-badge--compact {
+  padding: 0;
+  border: 2px solid var(--surface);
+  background: var(--buff);
+}
+
+.buff-badge--compact .buff-badge__icon {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+.buff-badge.is-selected {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+
+.buff-badge.is-lifted {
+  transform: scale(1.06) rotate(-2deg);
+  box-shadow: var(--shadow-drag);
+}
+
+/* ---- Palette ----------------------------------------------------------- */
+
+.palette {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  transition:
+    border-color var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease);
+}
+
+.palette__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+}
+
+.palette__title {
+  font-size: var(--fs-md);
+}
+
+.palette__filters {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.palette__filter {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+}
+
+.palette__filter--icon {
+  width: 30px;
+  padding: 0;
+  color: var(--buff);
+}
+
+.palette__filter:hover:not(:disabled) {
+  background: var(--surface);
+  border: 0;
+}
+
+.palette__filter[aria-pressed='true'] {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.palette__filter--icon[aria-pressed='true'] {
+  color: var(--buff);
+}
+
+.palette__hint {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-subtle);
+}
+
+.palette__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-3) var(--s-5);
+}
+
+.palette__crops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-2);
+  flex: 1 1 520px;
+}
+
+.palette__buffs {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: var(--s-2);
+  flex: 0 1 300px;
+  padding-left: var(--s-4);
+  border-left: 1px dashed var(--border-strong);
+}
+
+/* A palette crop: the tile plus its name underneath. */
+.palette-crop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 64px;
+  min-height: 0;
+  padding: 6px 0 2px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-md);
+  cursor: grab;
+  touch-action: none;
+}
+
+.palette-crop:hover:not(:disabled) {
+  background: transparent;
+  border: 0;
+}
+
+.palette-crop:hover .crop-tile {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+.palette-crop:active {
+  cursor: grabbing;
+}
+
+.palette-crop.is-dragging .crop-tile {
+  opacity: 0.35;
+}
+
+.palette-crop__name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-buff {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-pill);
+  cursor: grab;
+  touch-action: none;
+}
+
+.palette-buff:hover:not(:disabled) {
+  background: transparent;
+  border: 0;
+}
+
+.palette-buff:hover .buff-badge {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-1);
+}
+
+.palette-buff.is-dragging .buff-badge {
+  opacity: 0.35;
+}
+
+/* While a goal, helper or plant is dragged, the palette is the remove area. */
+.palette--removing {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.palette__remove {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  font-weight: 650;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger-soft) 88%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: var(--r-lg);
+  pointer-events: none;
+  animation: palette-fade var(--dur-2) var(--ease);
+}
+
+.palette--remove-over .palette__remove {
+  background: color-mix(in srgb, var(--danger-soft) 96%, transparent);
+  border-style: solid;
+}
+
+@keyframes palette-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .palette__hint {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+
+  .palette__crops {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--s-2);
+    margin: 0 calc(-1 * var(--s-4));
+    padding-inline: var(--s-4);
+    scroll-snap-type: x proximity;
+  }
+
+  .palette-crop {
+    scroll-snap-align: start;
+  }
+
+  .palette__buffs {
+    padding-left: 0;
+    border-left: 0;
+  }
+}

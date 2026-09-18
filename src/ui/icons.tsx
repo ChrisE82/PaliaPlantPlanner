@@ -147,6 +147,71 @@ export function PencilIcon(props: IconProps) {
   );
 }
 
+// ---- Buff icons (filled, so they read at badge size) -----------------------
+
+function FilledIcon({ title, children, ...props }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="1.15em"
+      height="1.15em"
+      fill="currentColor"
+      aria-hidden={title ? undefined : true}
+      role={title ? 'img' : undefined}
+      focusable="false"
+      {...props}
+    >
+      {title && <title>{title}</title>}
+      {children}
+    </svg>
+  );
+}
+
+/** Water Retain */
+export function DropletIcon(props: IconProps) {
+  return (
+    <FilledIcon {...props}>
+      <path d="M12 2.5c-.3 0-.6.2-.8.4C9.4 5.3 5.5 10.4 5.5 14a6.5 6.5 0 0 0 13 0c0-3.6-3.9-8.7-5.7-11.1-.2-.2-.5-.4-.8-.4Z" />
+    </FilledIcon>
+  );
+}
+
+/** Weed Block */
+export function ShieldIcon(props: IconProps) {
+  return (
+    <FilledIcon {...props}>
+      <path d="M12 2.2 4.5 5.1a1 1 0 0 0-.6.9v5.3c0 5 3.3 9.3 7.8 10.5.2.1.4.1.6 0 4.5-1.2 7.8-5.5 7.8-10.5V6a1 1 0 0 0-.6-.9L12 2.2Z" />
+    </FilledIcon>
+  );
+}
+
+/** Harvest Boost */
+export function SheafIcon(props: IconProps) {
+  return (
+    <FilledIcon {...props}>
+      <path d="M11 21.5V13c-3.3-.3-5.8-2.8-6-6.1 0-.5.4-.9.9-.9 2.4.1 4.4 1.4 5.1 3.3V4.2c0-.4.3-.8.7-.9.3 0 .5 0 .7.2l.1.1c.3.3.5.6.5 1v5.1c.8-1.8 2.7-3.1 5.1-3.2.5 0 .9.4.9.9-.2 3.3-2.7 5.8-6 6.1v8.4c0 .5-.4.9-.9.9h-.2c-.5 0-.9-.4-.9-.9Z" />
+    </FilledIcon>
+  );
+}
+
+/** Quality Boost */
+export function StarIcon(props: IconProps) {
+  return (
+    <FilledIcon {...props}>
+      <path d="m12 2.8 2.6 5.5 6 .8c.6.1.9.9.4 1.3l-4.4 4.1 1.1 5.9c.1.6-.6 1.1-1.1.8L12 18.4l-5.3 2.8c-.6.3-1.2-.2-1.1-.8l1.1-5.9-4.4-4.1c-.5-.4-.2-1.2.4-1.3l6-.8L11.1 2.8c.3-.5 1.1-.5 1.4 0Z" />
+    </FilledIcon>
+  );
+}
+
+/** Growth Boost */
+export function FastForwardIcon(props: IconProps) {
+  return (
+    <FilledIcon {...props}>
+      <path d="M3.5 6.3v11.4c0 .8.9 1.2 1.5.8l7-5.7c.5-.4.5-1.2 0-1.6l-7-5.7c-.6-.4-1.5 0-1.5.8Zm9 0v11.4c0 .8.9 1.2 1.5.8l7-5.7c.5-.4.5-1.2 0-1.6l-7-5.7c-.6-.4-1.5 0-1.5.8Z" />
+    </FilledIcon>
+  );
+}
+
 export function EraserIcon(props: IconProps) {
   return (
     <Icon {...props}>

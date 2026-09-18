@@ -3,6 +3,7 @@
 @import './styles/base.css';
 @import './styles/controls.css';
 @import './styles/shell.css';
+@import './styles/palette.css';
 @import './styles/setup.css';
 @import './styles/results.css';
 @import './styles/dnd.css';
